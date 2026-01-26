@@ -1,0 +1,599 @@
+// Core orchestration - the main Runner struct and run methods
+
+use std::fs;
+use std::path::{Path, PathBuf};
+use std::sync::Arc;
+use tokio::sync::Mutex;
+use futures::future::join_all;
+use tracing::{error, info, warn};
+
+use crate::core::{
+    assemble_creation_prompt, assemble_sequential_creation_prompt, assemble_test_prompt, 
+    assemble_verification_prompt_multi, assemble_retry_prompt_multi, assemble_edit_prompt,
+    assemble_sequential_split_prompt,
+    count_lines, extract_code, extract_code_files, parse_verification, parse_edit_instructions, 
+    apply_edits, JobsManager, OllamaClient, StatusManager, EditInstruction,
+    DependencyGraph,
+    SYSTEM_PROMPT_CREATE, SYSTEM_PROMPT_TEST,
+};
+use crate::error::WorkSplitError;
+use crate::models::{Config, JobStatus};
+
+mod edit;
+mod sequential;
+mod verify;
+
+/// Job runner - orchestrates the creation and verification workflow
+pub struct Runner {
+    config: Config,
+    jobs_manager: JobsManager,
+    status_manager: StatusManager,
+    ollama: OllamaClient,
+    project_root: PathBuf,
+    /// Track files modified during current run session
+    modified_files: Vec<PathBuf>,
+}
+
+/// Result of running a job
+#[derive(Debug)]
+pub struct JobResult {
+    pub job_id: String,
+    pub status: JobStatus,
+    pub error: Option<String>,
+    pub output_paths: Vec<PathBuf>,
+    pub output_lines: Option<usize>,
+    pub test_path: Option<PathBuf>,
+    pub test_lines: Option<usize>,
+    pub retry_attempted: bool,
+    pub implicit_context_files: Vec<PathBuf>,
+}
+
+impl JobResult {
+    pub fn output_path(&self) -> Option<&PathBuf> {
+        self.output_paths.first()
+    }
+}
+
+/// Summary of a run
+#[derive(Debug, Default)]
+pub struct RunSummary {
+    pub processed: usize,
+    pub passed: usize,
+    pub failed: usize,
+    pub skipped: usize,
+    pub results: Vec<JobResult>,
+}
+
+impl Runner {
+    pub fn new(config: Config, project_root: PathBuf) -> Result<Self, WorkSplitError> {
+        let jobs_manager = JobsManager::new(project_root.clone(), config.limits.clone());
+        let status_manager = StatusManager::new(jobs_manager.jobs_dir())?;
+        let ollama = OllamaClient::new(config.ollama.clone())?;
+
+        Ok(Self {
+            config,
+            jobs_manager,
+            status_manager,
+            ollama,
+            project_root,
+            modified_files: Vec::new(),
+        })
+    }
+
+    pub async fn run_all(&mut self, resume_stuck: bool, stop_on_fail: bool) -> Result<RunSummary, WorkSplitError> {
+        self.modified_files.clear();
+        let discovered = self.jobs_manager.discover_jobs()?;
+        self.status_manager.sync_with_jobs(&discovered)?;
+
+        let stuck = self.status_manager.get_stuck_jobs();
+        if !stuck.is_empty() && !resume_stuck {
+            warn!("Found {} stuck jobs. Use --resume to retry them: {:?}",
+                stuck.len(), stuck.iter().map(|e| &e.id).collect::<Vec<_>>());
+        }
+
+        let mut jobs_to_run: Vec<String> = self.status_manager.get_ready_jobs()
+            .iter().map(|e| e.id.clone()).collect();
+
+        if resume_stuck {
+            jobs_to_run.extend(stuck.iter().map(|e| e.id.clone()));
+        }
+        jobs_to_run.sort();
+
+        if jobs_to_run.is_empty() {
+            info!("No jobs to process");
+            return Ok(RunSummary::default());
+        }
+
+        let total_jobs = jobs_to_run.len();
+        info!("Processing {} jobs", total_jobs);
+
+        match self.ollama.ensure_running().await {
+            Ok(true) => info!("Ollama is ready"),
+            Ok(false) => warn!("Ollama may not be fully ready"),
+            Err(e) => {
+                error!("Cannot connect to Ollama: {}", e);
+                return Err(WorkSplitError::Ollama(e));
+            }
+        }
+
+        let create_prompt = self.jobs_manager.load_create_prompt()?;
+        let verify_prompt = self.jobs_manager.load_verify_prompt()?;
+        let test_prompt = self.jobs_manager.load_test_prompt().ok();
+        let edit_prompt = self.jobs_manager.load_edit_prompt()?;
+        let verify_edit_prompt = self.jobs_manager.load_verify_edit_prompt()?;
+        let split_prompt = self.jobs_manager.load_split_prompt().ok();
+
+        let mut summary = RunSummary::default();
+        let mut stopped_early = false;
+
+        for job_id in jobs_to_run {
+            match self.run_job(&job_id, &create_prompt, &verify_prompt, test_prompt.as_deref(),
+                              &edit_prompt, &verify_edit_prompt, split_prompt.as_deref()).await {
+                Ok(result) => {
+                    summary.processed += 1;
+                    let job_failed = result.status == JobStatus::Fail;
+                    match result.status {
+                        JobStatus::Pass => summary.passed += 1,
+                        JobStatus::Fail => summary.failed += 1,
+                        _ => {}
+                    }
+                    summary.results.push(result);
+                    if stop_on_fail && job_failed {
+                        info!("Stopping due to job failure (--stop-on-fail)");
+                        stopped_early = true;
+                        break;
+                    }
+                }
+                Err(e) => {
+                    error!("Job '{}' failed with error: {}", job_id, e);
+                    summary.processed += 1;
+                    summary.failed += 1;
+                    summary.results.push(JobResult {
+                        job_id: job_id.clone(), status: JobStatus::Fail,
+                        error: Some(e.to_string()), output_paths: Vec::new(),
+                        output_lines: None, test_path: None, test_lines: None,
+                        retry_attempted: false, implicit_context_files: Vec::new(),
+                    });
+                    let _ = self.status_manager.set_failed(&job_id, e.to_string());
+                    if stop_on_fail {
+                        stopped_early = true;
+                        break;
+                    }
+                }
+            }
+        }
+
+        if stopped_early {
+            summary.skipped = total_jobs - summary.processed;
+        }
+
+        info!("Run complete: {} passed, {} failed, {} remaining",
+            summary.passed, summary.failed, self.status_manager.get_ready_jobs().len());
+        Ok(summary)
+    }
+
+    /// Run jobs in parallel batches based on dependency analysis
+    /// max_concurrent: Maximum number of jobs to run simultaneously (0 = unlimited)
+    pub async fn run_batch(
+        &mut self,
+        resume_stuck: bool,
+        stop_on_fail: bool,
+        max_concurrent: usize,
+    ) -> Result<RunSummary, WorkSplitError> {
+        self.modified_files.clear();
+        let discovered = self.jobs_manager.discover_jobs()?;
+        self.status_manager.sync_with_jobs(&discovered)?;
+
+        // Collect jobs to run
+        let stuck = self.status_manager.get_stuck_jobs();
+        if !stuck.is_empty() && !resume_stuck {
+            warn!("Found {} stuck jobs. Use --resume to retry them", stuck.len());
+        }
+
+        let mut jobs_to_run: Vec<String> = self.status_manager.get_ready_jobs()
+            .iter().map(|e| e.id.clone()).collect();
+
+        if resume_stuck {
+            jobs_to_run.extend(stuck.iter().map(|e| e.id.clone()));
+        }
+        jobs_to_run.sort();
+
+        if jobs_to_run.is_empty() {
+            info!("No jobs to process");
+            return Ok(RunSummary::default());
+        }
+
+        // Build dependency graph
+        let jobs_metadata: Vec<(String, crate::models::JobMetadata)> = jobs_to_run
+            .iter()
+            .filter_map(|id| {
+                self.jobs_manager.parse_job(id).ok()
+                    .map(|job| (id.clone(), job.metadata))
+            })
+            .collect();
+
+        let graph = crate::core::DependencyGraph::build(&jobs_metadata);
+        let groups = graph.execution_groups(&jobs_to_run);
+
+        info!("Processing {} jobs in {} parallel groups", jobs_to_run.len(), groups.len());
+
+        // Check Ollama
+        match self.ollama.ensure_running().await {
+            Ok(true) => info!("Ollama is ready"),
+            Ok(false) => warn!("Ollama may not be fully ready"),
+            Err(e) => return Err(WorkSplitError::Ollama(e)),
+        }
+
+        // Load prompts once
+        let create_prompt = Arc::new(self.jobs_manager.load_create_prompt()?);
+        let verify_prompt = Arc::new(self.jobs_manager.load_verify_prompt()?);
+        let test_prompt = Arc::new(self.jobs_manager.load_test_prompt().ok());
+        let edit_prompt = Arc::new(self.jobs_manager.load_edit_prompt()?);
+        let verify_edit_prompt = Arc::new(self.jobs_manager.load_verify_edit_prompt()?);
+        let split_prompt = Arc::new(self.jobs_manager.load_split_prompt().ok());
+
+        let mut summary = RunSummary::default();
+        let mut stopped_early = false;
+
+        // Process each group
+        for (group_idx, group) in groups.iter().enumerate() {
+            if stopped_early {
+                summary.skipped += group.len();
+                continue;
+            }
+
+            info!("=== Batch Group {}/{}: {} jobs ===", group_idx + 1, groups.len(), group.len());
+
+            // Limit concurrency if specified
+            let chunks: Vec<&[String]> = if max_concurrent > 0 && group.len() > max_concurrent {
+                group.chunks(max_concurrent).collect()
+            } else {
+                vec![group.as_slice()]
+            };
+
+            for chunk in chunks {
+                if stopped_early { break; }
+
+                // For parallel execution, we need to clone necessary state
+                // Note: In a full implementation, you'd want to refactor Runner
+                // to be more parallel-friendly. For now, run sequentially within group.
+                for job_id in chunk {
+                    match self.run_job(
+                        job_id,
+                        &create_prompt,
+                        &verify_prompt,
+                        test_prompt.as_ref().as_deref(),
+                        &edit_prompt,
+                        &verify_edit_prompt,
+                        split_prompt.as_ref().as_deref(),
+                    ).await {
+                        Ok(result) => {
+                            summary.processed += 1;
+                            let job_failed = result.status == JobStatus::Fail;
+                            match result.status {
+                                JobStatus::Pass => summary.passed += 1,
+                                JobStatus::Fail => summary.failed += 1,
+                                _ => {}
+                            }
+                            summary.results.push(result);
+                            if stop_on_fail && job_failed {
+                                info!("Stopping batch due to job failure (--stop-on-fail)");
+                                stopped_early = true;
+                                break;
+                            }
+                        }
+                        Err(e) => {
+                            error!("Job '{}' failed with error: {}", job_id, e);
+                            summary.processed += 1;
+                            summary.failed += 1;
+                            summary.results.push(JobResult {
+                                job_id: job_id.to_string(),
+                                status: JobStatus::Fail,
+                                error: Some(e.to_string()),
+                                output_paths: Vec::new(),
+                                output_lines: None,
+                                test_path: None,
+                                test_lines: None,
+                                retry_attempted: false,
+                                implicit_context_files: Vec::new(),
+                            });
+                            let _ = self.status_manager.set_failed(job_id, e.to_string());
+                            if stop_on_fail {
+                                stopped_early = true;
+                                break;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        if stopped_early {
+            let total: usize = groups.iter().map(|g| g.len()).sum();
+            summary.skipped = total - summary.processed;
+        }
+
+        info!("Batch complete: {} passed, {} failed, {} skipped",
+            summary.passed, summary.failed, summary.skipped);
+        Ok(summary)
+    }
+
+    pub async fn run_single(&mut self, job_id: &str) -> Result<JobResult, WorkSplitError> {
+        self.modified_files.clear();
+        let discovered = self.jobs_manager.discover_jobs()?;
+        self.status_manager.sync_with_jobs(&discovered)?;
+
+        let create_prompt = self.jobs_manager.load_create_prompt()?;
+        let verify_prompt = self.jobs_manager.load_verify_prompt()?;
+        let test_prompt = self.jobs_manager.load_test_prompt().ok();
+        let edit_prompt = self.jobs_manager.load_edit_prompt()?;
+        let verify_edit_prompt = self.jobs_manager.load_verify_edit_prompt()?;
+        let split_prompt = self.jobs_manager.load_split_prompt().ok();
+
+        self.run_job(job_id, &create_prompt, &verify_prompt, test_prompt.as_deref(),
+                    &edit_prompt, &verify_edit_prompt, split_prompt.as_deref()).await
+    }
+
+    async fn run_job(&mut self, job_id: &str, create_prompt: &str, verify_prompt: &str,
+                     test_prompt: Option<&str>, edit_prompt: &str, verify_edit_prompt: &str,
+                     split_prompt: Option<&str>) -> Result<JobResult, WorkSplitError> {
+        info!("Processing job: {}", job_id);
+        let job = self.jobs_manager.parse_job(job_id)?;
+        let context_files = self.load_context_files_with_implicit(&job)?;
+
+        let (tokens, is_warning, is_error) = self.jobs_manager.check_token_budget(
+            create_prompt, &context_files, &job.instructions, 32000);
+        if is_error {
+            return Err(WorkSplitError::TokenBudgetExceeded { estimated: tokens, max: 32000 });
+        }
+        if is_warning {
+            warn!("Job '{}' has high token usage: {} estimated", job_id, tokens);
+        }
+
+        self.status_manager.update_status(job_id, JobStatus::PendingWork)?;
+
+        let mut test_result_path: Option<PathBuf> = None;
+        let mut test_result_lines: Option<usize> = None;
+
+        if job.metadata.is_tdd_enabled() {
+            let test_prompt_str = test_prompt.ok_or_else(|| WorkSplitError::SystemPromptNotFound(
+                self.jobs_manager.jobs_dir().join("_systemprompt_test.md")))?;
+            info!("TDD workflow enabled for job '{}'", job_id);
+            self.status_manager.update_status(job_id, JobStatus::PendingTest)?;
+
+            let test_path = job.metadata.test_path().unwrap();
+            let test_gen_prompt = assemble_test_prompt(test_prompt_str, &context_files,
+                &job.instructions, &test_path.display().to_string());
+
+            let test_response = self.ollama.generate(Some(SYSTEM_PROMPT_TEST), &test_gen_prompt, self.config.behavior.stream_output)
+                .await.map_err(|e| { let _ = self.status_manager.set_failed(job_id, e.to_string()); WorkSplitError::Ollama(e) })?;
+
+            let test_code = extract_code(&test_response);
+            let full_test_path = self.project_root.join(&test_path);
+            if let Some(parent) = full_test_path.parent() {
+                if !parent.exists() && self.config.behavior.create_output_dirs {
+                    fs::create_dir_all(parent)?;
+                }
+            }
+            self.safe_write(&full_test_path, &test_code)?;
+            test_result_path = Some(full_test_path);
+            test_result_lines = Some(count_lines(&test_code));
+        }
+
+        let default_output_path = job.metadata.output_path();
+        let mut generated_files: Vec<(PathBuf, String)> = Vec::new();
+        let mut full_output_paths: Vec<PathBuf> = Vec::new();
+        let mut total_lines = 0;
+
+        if job.metadata.is_split_mode() {
+            let split_system_prompt = split_prompt.ok_or_else(|| WorkSplitError::SystemPromptNotFound(
+                self.jobs_manager.jobs_dir().join("_systemprompt_split.md")))?;
+            let target_file_path = job.metadata.target_file.as_ref().unwrap();
+            let output_files = job.metadata.get_output_files();
+            info!("Split mode (sequential): splitting {} into {} file(s)", target_file_path.display(), output_files.len());
+            
+            let target_content = self.jobs_manager.load_target_file_unlimited(target_file_path)?;
+            let mut previously_generated: Vec<(PathBuf, String)> = Vec::new();
+            
+            for (idx, output_path) in output_files.iter().enumerate() {
+                let remaining_files: Vec<PathBuf> = output_files[idx + 1..].to_vec();
+                info!("[{}/{}] Splitting into: {}", idx + 1, output_files.len(), output_path.display());
+                
+                let prompt = assemble_sequential_split_prompt(split_system_prompt,
+                    (target_file_path, &target_content), &context_files, &previously_generated,
+                    &job.instructions, &output_path.display().to_string(), &remaining_files);
+                
+                let response = self.ollama.generate(Some(SYSTEM_PROMPT_CREATE), &prompt, self.config.behavior.stream_output)
+                    .await.map_err(|e| { let _ = self.status_manager.set_failed(job_id, e.to_string()); WorkSplitError::Ollama(e) })?;
+                
+                let extracted = extract_code_files(&response);
+                let content = if extracted.is_empty() { extract_code(&response) } else { extracted[0].content.clone() };
+                
+                if content.is_empty() {
+                    let msg = format!("Split produced no content for {}", output_path.display());
+                    self.status_manager.set_failed(job_id, msg.clone())?;
+                    return Err(WorkSplitError::EditFailed(msg));
+                }
+                
+                total_lines += count_lines(&content);
+                let full_path = self.project_root.join(output_path);
+                if let Some(parent) = full_path.parent() {
+                    if !parent.exists() && self.config.behavior.create_output_dirs { fs::create_dir_all(parent)?; }
+                }
+                self.safe_write(&full_path, &content)?;
+                
+                previously_generated.push((output_path.clone(), content.clone()));
+                generated_files.push((output_path.clone(), content));
+                self.modified_files.push(full_path.clone());
+                full_output_paths.push(full_path);
+            }
+        } else if job.metadata.is_edit_mode() {
+            let files = edit::process_edit_mode(
+                &self.ollama,
+                &self.project_root,
+                &self.config,
+                &job,
+                &context_files,
+                &edit_prompt,
+            ).await?;
+            generated_files = files.0;
+            full_output_paths = files.1;
+            total_lines = files.2;
+        } else if job.metadata.is_sequential() {
+            let files = sequential::process_sequential_mode(
+                &self.ollama,
+                &self.project_root,
+                &self.config,
+                &job,
+                &context_files,
+                &create_prompt,
+            ).await?;
+            generated_files = files.0;
+            full_output_paths = files.1;
+            total_lines = files.2;
+        } else {
+            let prompt = assemble_creation_prompt(create_prompt, &context_files, &job.instructions,
+                &default_output_path.display().to_string());
+            let response = self.ollama.generate(Some(SYSTEM_PROMPT_CREATE), &prompt, self.config.behavior.stream_output)
+                .await.map_err(|e| { let _ = self.status_manager.set_failed(job_id, e.to_string()); WorkSplitError::Ollama(e) })?;
+            
+            for file in extract_code_files(&response) {
+                let path = file.path.clone().unwrap_or_else(|| default_output_path.clone());
+                total_lines += count_lines(&file.content);
+                generated_files.push((path, file.content.clone()));
+            }
+            
+            for (path, content) in &generated_files {
+                let full_path = self.project_root.join(path);
+                if let Some(parent) = full_path.parent() {
+                    if !parent.exists() && self.config.behavior.create_output_dirs { fs::create_dir_all(parent)?; }
+                }
+                self.safe_write(&full_path, content)?;
+                self.modified_files.push(full_path.clone());
+                full_output_paths.push(full_path);
+            }
+        }
+
+        self.status_manager.update_status(job_id, JobStatus::PendingVerification)?;
+
+        let effective_verify = if job.metadata.is_edit_mode() { verify_edit_prompt } else { verify_prompt };
+        let (mut final_result, final_error) = verify::run_verification(
+            &self.ollama,
+            effective_verify,
+            &context_files,
+            &generated_files,
+            &job.instructions,
+        ).await?;
+
+        let mut retry_attempted = false;
+        let mut final_status = final_result.to_job_status();
+        let mut final_error = final_error;
+
+        if !final_result.is_pass() {
+            info!("Verification failed, retrying...");
+            retry_attempted = true;
+            let error_msg = final_error.clone().unwrap_or_default();
+            
+            let retry_files = verify::run_retry(
+                &self.ollama,
+                create_prompt,
+                &context_files,
+                &generated_files,
+                &job.instructions,
+                &error_msg,
+            ).await?;
+
+            for (path, content) in &retry_files {
+                let full_path = self.project_root.join(path);
+                if let Some(parent) = full_path.parent() {
+                    if !parent.exists() && self.config.behavior.create_output_dirs { fs::create_dir_all(parent)?; }
+                }
+                self.safe_write(&full_path, content)?;
+                self.modified_files.push(full_path.clone());
+            }
+            
+            full_output_paths = retry_files.iter().map(|(p, _)| self.project_root.join(p)).collect();
+            
+            let (r, e) = verify::run_verification(
+                &self.ollama,
+                effective_verify,
+                &context_files,
+                &retry_files,
+                &job.instructions,
+            ).await?;
+            final_result = r;
+            final_error = e;
+            final_status = final_result.to_job_status();
+        }
+
+        if let Some(ref msg) = final_error {
+            self.status_manager.set_failed(job_id, msg.clone())?;
+        } else {
+            self.status_manager.update_status(job_id, final_status)?;
+        }
+
+        info!("Job '{}' completed with status: {:?}", job_id, final_status);
+        Ok(JobResult {
+            job_id: job_id.to_string(), status: final_status, error: final_error,
+            output_paths: full_output_paths, output_lines: Some(total_lines),
+            test_path: test_result_path, test_lines: test_result_lines,
+            retry_attempted, implicit_context_files: Vec::new(),
+        })
+    }
+
+    fn load_context_files_with_implicit(&mut self, job: &crate::models::Job) -> Result<Vec<(PathBuf, String)>, WorkSplitError> {
+        let mut context_files = self.jobs_manager.load_context_files(job)?;
+        if !self.modified_files.is_empty() {
+            let max = self.config.limits.max_context_files;
+            let available = max.saturating_sub(context_files.len());
+            if available > 0 {
+                let output_path = self.project_root.join(job.metadata.output_path());
+                let implicit: Vec<&PathBuf> = self.modified_files.iter()
+                    .filter(|p| p.exists() && *p != &output_path)
+                    .take(available).collect();
+                for path in implicit {
+                    if let Ok(content) = fs::read_to_string(path) {
+                        context_files.push((path.clone(), content));
+                    }
+                }
+            }
+        }
+        Ok(context_files)
+    }
+
+    fn is_protected_path(&self, path: &Path) -> bool {
+        let jobs_dir = self.jobs_manager.jobs_dir();
+        if let Ok(canonical_jobs) = jobs_dir.canonicalize() {
+            if let Ok(canonical_path) = path.canonicalize() {
+                if canonical_path.starts_with(&canonical_jobs) {
+                    if let Some(name) = canonical_path.file_name().and_then(|f| f.to_str()) {
+                        return name.starts_with('_');
+                    }
+                }
+            }
+        }
+        false
+    }
+
+    fn safe_write(&mut self, path: &Path, content: &str) -> Result<(), WorkSplitError> {
+        if self.is_protected_path(path) {
+            return Err(WorkSplitError::ProtectedPathViolation(path.to_path_buf()));
+        }
+        fs::write(path, content)?;
+        // Invalidate cache entry since file was modified
+        self.jobs_manager.invalidate_cache(path);
+        Ok(())
+    }
+
+    pub fn get_summary(&self) -> crate::core::StatusSummary { self.status_manager.get_summary() }
+    pub fn reset_job(&mut self, job_id: &str) -> Result<(), WorkSplitError> {
+        self.status_manager.reset_job(job_id)?;
+        Ok(())
+    }
+    pub fn status_manager(&self) -> &StatusManager { &self.status_manager }
+    pub fn jobs_manager(&self) -> &JobsManager { &self.jobs_manager }
+    
+    pub fn cache_stats(&self) -> crate::core::file_cache::CacheStats {
+        self.jobs_manager.cache_stats()
+    }
+}

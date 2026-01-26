@@ -1,0 +1,42 @@
+# Rust build artifacts
+/target/
+**/target/
+
+# Cargo lock file (uncomment if this is a library)
+# Cargo.lock
+
+# Backup files
+*.bak
+*.orig
+
+# IDE and editor files
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Debug files
+*.pdb
+
+# Environment files
+.env
+.env.local
+.env.*.local
+
+# Coverage reports
+*.profraw
+*.profdata
+coverage/
+lcov.info
+tarpaulin-report.html
+
+# Documentation build
+/doc/
+
+# Benchmark data
+criterion/
+
+# OS-specific files
+Thumbs.db

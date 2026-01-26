@@ -1,0 +1,145 @@
+use std::path::PathBuf;
+use tracing::info;
+
+use crate::core::{load_config, Runner};
+use crate::error::WorkSplitError;
+use crate::models::JobStatus;
+
+/// Run options
+pub struct RunOptions {
+    /// Specific job to run (if None, run all pending)
+    pub job_id: Option<String>,
+    /// Resume stuck jobs
+    pub resume: bool,
+    /// Reset specific job to created status
+    pub reset: Option<String>,
+    /// Model override
+    pub model: Option<String>,
+    /// URL override
+    pub url: Option<String>,
+    /// Timeout override
+    pub timeout: Option<u64>,
+    /// Disable streaming output
+    pub no_stream: bool,
+    /// Stop processing when any job fails
+    pub stop_on_fail: bool,
+    /// Enable batch mode with dependency-based parallel execution
+    pub batch: bool,
+    /// Maximum concurrent jobs (0 = unlimited)
+    pub max_concurrent: usize,
+}
+
+impl Default for RunOptions {
+    fn default() -> Self {
+        Self {
+            job_id: None,
+            resume: false,
+            reset: None,
+            model: None,
+            url: None,
+            timeout: None,
+            no_stream: false,
+            stop_on_fail: false,
+            batch: false,
+            max_concurrent: 0,
+        }
+    }
+}
+
+/// Run jobs
+pub async fn run_jobs(project_root: &PathBuf, options: RunOptions) -> Result<(), WorkSplitError> {
+    let config = load_config(
+        project_root,
+        options.model,
+        options.url,
+        options.timeout,
+        options.no_stream,
+    )?;
+
+    let mut runner = Runner::new(config, project_root.clone())?;
+
+    // Handle reset
+    if let Some(job_id) = options.reset {
+        runner.reset_job(&job_id)?;
+        println!("Reset job '{}' to created status", job_id);
+        return Ok(());
+    }
+
+    // Run specific job or all jobs
+    if let Some(job_id) = options.job_id {
+        info!("Running single job: {}", job_id);
+        let result = runner.run_single(&job_id).await?;
+        
+        print_job_result(&result.job_id, result.status, result.error.as_deref(), result.output_lines);
+        
+        // Exit with error if job failed and stop_on_fail is set
+        if options.stop_on_fail && result.status == JobStatus::Fail {
+            println!("\nStopping due to failure (--stop-on-fail)");
+            std::process::exit(1);
+        }
+    } else if options.batch {
+        info!("Running in batch mode");
+        let summary = runner.run_batch(options.resume, options.stop_on_fail, options.max_concurrent).await?;
+        
+        println!("\n=== Batch Run Summary ===");
+        println!("Processed: {}", summary.processed);
+        println!("Passed:    {}", summary.passed);
+        println!("Failed:    {}", summary.failed);
+        if summary.skipped > 0 {
+            println!("Skipped:   {} (not processed)", summary.skipped);
+        }
+        
+        if !summary.results.is_empty() {
+            println!("\nResults:");
+            for result in &summary.results {
+                print_job_result(&result.job_id, result.status, result.error.as_deref(), result.output_lines);
+            }
+        }
+        
+        if options.stop_on_fail && summary.failed > 0 {
+            println!("\nStopping due to failure (--stop-on-fail)");
+            std::process::exit(1);
+        }
+    } else {
+        info!("Running all pending jobs");
+        let summary = runner.run_all(options.resume, options.stop_on_fail).await?;
+        
+        println!("\n=== Run Summary ===");
+        println!("Processed: {}", summary.processed);
+        println!("Passed:    {}", summary.passed);
+        println!("Failed:    {}", summary.failed);
+        if summary.skipped > 0 {
+            println!("Skipped:   {} (not processed)", summary.skipped);
+        }
+        
+        if !summary.results.is_empty() {
+            println!("\nResults:");
+            for result in &summary.results {
+                print_job_result(&result.job_id, result.status, result.error.as_deref(), result.output_lines);
+            }
+        }
+        
+        // Exit with error if any job failed and stop_on_fail is set
+        if options.stop_on_fail && summary.failed > 0 {
+            println!("\nStopping due to failure (--stop-on-fail)");
+            std::process::exit(1);
+        }
+    }
+
+    Ok(())
+}
+
+fn print_job_result(job_id: &str, status: JobStatus, error: Option<&str>, lines: Option<usize>) {
+    let status_str = match status {
+        JobStatus::Pass => "PASS",
+        JobStatus::Fail => "FAIL",
+        _ => "???",
+    };
+    
+    let lines_str = lines.map(|l| format!(" ({} lines)", l)).unwrap_or_default();
+    
+    match error {
+        Some(err) => println!("  {} [{}]{}: {}", job_id, status_str, lines_str, err),
+        None => println!("  {} [{}]{}", job_id, status_str, lines_str),
+    }
+}

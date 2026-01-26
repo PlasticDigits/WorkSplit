@@ -1,0 +1,61 @@
+[package]
+name = "worksplit"
+version = "0.1.0"
+edition = "2021"
+description = "CLI tool that orchestrates local Ollama LLM for code generation and verification"
+authors = ["WorkSplit Contributors"]
+license = "MIT"
+repository = "https://github.com/worksplit/worksplit"
+keywords = ["cli", "llm", "ollama", "code-generation"]
+categories = ["command-line-utilities", "development-tools"]
+
+[dependencies]
+# CLI
+clap = { version = "4", features = ["derive"] }
+
+# Async runtime
+tokio = { version = "1", features = ["full"] }
+
+# HTTP client
+reqwest = { version = "0.12", features = ["json", "stream"] }
+
+# Serialization
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+serde_yaml = "0.9"
+toml = "0.8"
+
+# Date/time
+chrono = { version = "0.4", features = ["serde"] }
+
+# Error handling
+thiserror = "2"
+anyhow = "1"
+
+# Logging
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+
+# Markdown frontmatter parsing
+gray_matter = "0.2"
+
+# Regex for output parsing
+regex = "1"
+
+# Async streaming
+futures = "0.3"
+
+[dev-dependencies]
+# Temporary files for testing
+tempfile = "3"
+
+# Async testing
+tokio-test = "0.4"
+
+[[bin]]
+name = "worksplit"
+path = "src/main.rs"
+
+[lib]
+name = "worksplit"
+path = "src/lib.rs"
