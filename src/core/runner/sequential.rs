@@ -28,7 +28,7 @@ pub(crate) async fn process_sequential_mode(
         let prompt = assemble_sequential_creation_prompt(create_prompt, context_files,
             &previously_generated, &job.instructions, &output_path.display().to_string(), &remaining);
         
-        let response = ollama.generate(Some(SYSTEM_PROMPT_CREATE), &prompt, config.behavior.stream_output)
+        let response = ollama.generate_with_retry(Some(SYSTEM_PROMPT_CREATE), &prompt, config.behavior.stream_output)
             .await
             .map_err(|e| { WorkSplitError::Ollama(e) })?;
         

@@ -25,7 +25,7 @@ pub(crate) async fn process_edit_mode(
     }
     
     let prompt = assemble_edit_prompt(edit_prompt, &target_file_contents, context_files, &job.instructions);
-    let response = ollama.generate(Some(SYSTEM_PROMPT_EDIT), &prompt, config.behavior.stream_output)
+    let response = ollama.generate_with_retry(Some(SYSTEM_PROMPT_EDIT), &prompt, config.behavior.stream_output)
         .await
         .map_err(|e| { WorkSplitError::Ollama(e) })?;
     

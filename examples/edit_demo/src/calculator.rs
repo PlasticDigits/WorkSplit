@@ -45,7 +45,7 @@ mod tests {
     #[test]
     fn test_divide() {
         assert_eq!(divide(10, 2), Some(5));
-        assert_eq!(divide(5, 0), None);
-        assert_eq!(divide(-6, 2), Some(-3));
+        assert_eq!(divide(10, 0), None);
+        assert_eq!(divide(-6, 3), Some(-2));
     }
 }

@@ -4,7 +4,7 @@ use serde::{Deserialize, Serialize};
 use std::io::{self, Write};
 use std::process::Command;
 use std::time::Duration;
-use tracing::{debug, info, warn};
+use tracing::{debug, error, info, warn};
 
 use crate::error::OllamaError;
 use crate::models::OllamaConfig;
@@ -59,6 +59,9 @@ struct ChatMessageResponse {
     role: String,
     #[serde(default)]
     content: String,
+    /// GLM models use a "thinking" field for chain-of-thought reasoning
+    #[serde(default)]
+    thinking: Option<String>,
 }
 
 impl OllamaClient {
@@ -135,10 +138,13 @@ impl OllamaClient {
         let mut buffer = String::new();
         let mut generation_done = false;
         let mut token_count = 0usize;
+        let mut thinking_token_count = 0usize;
         let mut last_progress_log = std::time::Instant::now();
         let mut last_token_time = std::time::Instant::now();
+        let generation_start = std::time::Instant::now();
         let progress_interval = std::time::Duration::from_secs(10);
         let stall_timeout = std::time::Duration::from_secs(120); // 2 minute stall timeout
+        let thinking_timeout = std::time::Duration::from_secs(120); // 2 minute thinking timeout
 
         while let Some(chunk_result) = stream.next().await {
             let chunk = chunk_result.map_err(|e| OllamaError::StreamError(e.to_string()))?;
@@ -178,18 +184,45 @@ impl OllamaClient {
                 };
 
                 // Extract content from message field (chat API format)
-                let content = parsed.message
-                    .as_ref()
-                    .map(|m| m.content.as_str())
-                    .unwrap_or("");
+                // GLM models use a "thinking" field during reasoning phase before outputting content
+                let message = parsed.message.as_ref();
+                let content = message.map(|m| m.content.as_str()).unwrap_or("");
+                let is_thinking = message
+                    .and_then(|m| m.thinking.as_ref())
+                    .map(|t| !t.is_empty())
+                    .unwrap_or(false);
+                
                 full_response.push_str(content);
                 token_count += 1;
+                if is_thinking {
+                    thinking_token_count += 1;
+                }
                 last_token_time = std::time::Instant::now();
+
+                // Check for thinking timeout (model stuck in reasoning loop)
+                if full_response.is_empty() && generation_start.elapsed() > thinking_timeout {
+                    warn!(
+                        "SYSTEM PROMPT ERROR: Model stuck in thinking loop for {:?} ({} thinking tokens, 0 content). \
+                        The system prompt may need adjustment to prevent over-analysis.",
+                        generation_start.elapsed(),
+                        thinking_token_count
+                    );
+                    return Err(OllamaError::ThinkingTimeout {
+                        duration_secs: generation_start.elapsed().as_secs(),
+                        thinking_tokens: thinking_token_count,
+                    });
+                }
 
                 // Progress logging for non-streaming mode
                 if !stream_to_stdout && last_progress_log.elapsed() > progress_interval {
-                    info!("Generation in progress: {} tokens, {} chars so far...", 
-                        token_count, full_response.len());
+                    if is_thinking && full_response.is_empty() {
+                        info!("Model thinking: {} tokens ({:.0}s elapsed)...", 
+                            thinking_token_count, 
+                            generation_start.elapsed().as_secs_f32());
+                    } else {
+                        info!("Generation in progress: {} tokens, {} chars so far...", 
+                            token_count, full_response.len());
+                    }
                     last_progress_log = std::time::Instant::now();
                 }
 
@@ -221,6 +254,45 @@ impl OllamaClient {
 
         info!("Generated {} characters", full_response.len());
         Ok(full_response)
+    }
+
+    /// Generate with automatic retry on thinking timeout
+    /// 
+    /// If the model gets stuck in a thinking loop, retries once.
+    /// On second failure, returns the error for human review.
+    pub async fn generate_with_retry(
+        &self,
+        system_prompt: Option<&str>,
+        prompt: &str,
+        stream_to_stdout: bool,
+    ) -> Result<String, OllamaError> {
+        match self.generate(system_prompt, prompt, stream_to_stdout).await {
+            Ok(response) => Ok(response),
+            Err(OllamaError::ThinkingTimeout { duration_secs, thinking_tokens }) => {
+                warn!(
+                    "Thinking timeout on first attempt ({} tokens in {}s). Retrying once...",
+                    thinking_tokens, duration_secs
+                );
+                
+                // Retry once
+                match self.generate(system_prompt, prompt, stream_to_stdout).await {
+                    Ok(response) => {
+                        info!("Retry succeeded after initial thinking timeout");
+                        Ok(response)
+                    }
+                    Err(e @ OllamaError::ThinkingTimeout { .. }) => {
+                        error!(
+                            "SYSTEM PROMPT ERROR: Model failed twice due to thinking loop. \
+                            The system prompt needs adjustment. Error: {}",
+                            e
+                        );
+                        Err(e)
+                    }
+                    Err(e) => Err(e),
+                }
+            }
+            Err(e) => Err(e),
+        }
     }
 
     /// Check if Ollama is reachable

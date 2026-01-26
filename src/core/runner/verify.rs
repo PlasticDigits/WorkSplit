@@ -26,7 +26,7 @@ pub(crate) async fn run_verification(
     
     info!("Verification prompt size: {} chars", verify_prompt_str.len());
     
-    let verify_response = ollama.generate(Some(SYSTEM_PROMPT_VERIFY), &verify_prompt_str, false)
+    let verify_response = ollama.generate_with_retry(Some(SYSTEM_PROMPT_VERIFY), &verify_prompt_str, false)
         .await
         .map_err(|e| { WorkSplitError::Ollama(e) })?;
     
@@ -48,7 +48,7 @@ pub(crate) async fn run_retry(
 ) -> Result<Vec<(PathBuf, String)>, WorkSplitError> {
     let retry_prompt = assemble_retry_prompt_multi(create_prompt, context_files,
         instructions, generated_files, error_msg);
-    let retry_response = ollama.generate(Some(SYSTEM_PROMPT_RETRY), &retry_prompt, true)
+    let retry_response = ollama.generate_with_retry(Some(SYSTEM_PROMPT_RETRY), &retry_prompt, true)
         .await
         .map_err(|e| { WorkSplitError::Ollama(e) })?;
     

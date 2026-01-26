@@ -365,7 +365,7 @@ impl Runner {
             let test_gen_prompt = assemble_test_prompt(test_prompt_str, &context_files,
                 &job.instructions, &test_path.display().to_string());
 
-            let test_response = self.ollama.generate(Some(SYSTEM_PROMPT_TEST), &test_gen_prompt, self.config.behavior.stream_output)
+            let test_response = self.ollama.generate_with_retry(Some(SYSTEM_PROMPT_TEST), &test_gen_prompt, self.config.behavior.stream_output)
                 .await.map_err(|e| { let _ = self.status_manager.set_failed(job_id, e.to_string()); WorkSplitError::Ollama(e) })?;
 
             let test_code = extract_code(&test_response);
@@ -403,7 +403,7 @@ impl Runner {
                     (target_file_path, &target_content), &context_files, &previously_generated,
                     &job.instructions, &output_path.display().to_string(), &remaining_files);
                 
-                let response = self.ollama.generate(Some(SYSTEM_PROMPT_CREATE), &prompt, self.config.behavior.stream_output)
+                let response = self.ollama.generate_with_retry(Some(SYSTEM_PROMPT_CREATE), &prompt, self.config.behavior.stream_output)
                     .await.map_err(|e| { let _ = self.status_manager.set_failed(job_id, e.to_string()); WorkSplitError::Ollama(e) })?;
                 
                 let extracted = extract_code_files(&response);
@@ -454,7 +454,7 @@ impl Runner {
         } else {
             let prompt = assemble_creation_prompt(create_prompt, &context_files, &job.instructions,
                 &default_output_path.display().to_string());
-            let response = self.ollama.generate(Some(SYSTEM_PROMPT_CREATE), &prompt, self.config.behavior.stream_output)
+            let response = self.ollama.generate_with_retry(Some(SYSTEM_PROMPT_CREATE), &prompt, self.config.behavior.stream_output)
                 .await.map_err(|e| { let _ = self.status_manager.set_failed(job_id, e.to_string()); WorkSplitError::Ollama(e) })?;
             
             for file in extract_code_files(&response) {

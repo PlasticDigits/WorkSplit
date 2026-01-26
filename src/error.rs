@@ -111,6 +111,12 @@ pub enum OllamaError {
 
     #[error("Stream error: {0}")]
     StreamError(String),
+
+    #[error("SYSTEM PROMPT ERROR: Model stuck in thinking loop for {duration_secs}s ({thinking_tokens} thinking tokens, 0 output). Adjust system prompt to prevent over-analysis.")]
+    ThinkingTimeout {
+        duration_secs: u64,
+        thinking_tokens: usize,
+    },
 }
 
 impl From<reqwest::Error> for OllamaError {
