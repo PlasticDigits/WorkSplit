@@ -134,7 +134,7 @@ fn normalize_whitespace(text: &str) -> String {
 
 /// Find fuzzy match location in content
 /// Returns (start_idx, end_idx, matched_text) if found
-fn find_fuzzy_match(content: &str, find_text: &str) -> Option<(usize, usize, String)> {
+pub fn find_fuzzy_match(content: &str, find_text: &str) -> Option<(usize, usize, String)> {
     let normalized_find = normalize_whitespace(find_text);
     let find_lines: Vec<&str> = normalized_find.lines().collect();
     

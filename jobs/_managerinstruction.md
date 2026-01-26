@@ -2,6 +2,55 @@
 
 This document explains how to create job files for WorkSplit when breaking down a feature into implementable chunks.
 
+## Quick Job Creation with Templates
+
+**Preferred method**: Use `worksplit new-job` to scaffold job files quickly:
+
+```bash
+# Replace mode - generate a new file
+worksplit new-job feature_001 --template replace -o src/services/ -f my_service.rs
+
+# Edit mode - modify existing files  
+worksplit new-job fix_001 --template edit --targets src/main.rs
+
+# With context files
+worksplit new-job impl_001 --template replace -c src/types.rs -o src/ -f api.rs
+
+# Split mode - break large file into modules
+worksplit new-job split_001 --template split --targets src/large_file.rs
+
+# Sequential mode - multi-file with context accumulation
+worksplit new-job big_001 --template sequential -o src/
+```
+
+After running, edit the generated `jobs/<name>.md` to add specific requirements.
+
+### When to Use Each Template
+
+| Template | Use When |
+|----------|----------|
+| `replace` | Creating new files or completely rewriting existing ones |
+| `edit` | Making 1-10 surgical changes to existing files |
+| `split` | A file exceeds 900 lines and needs to be modularized |
+| `sequential` | Generating multiple interdependent files |
+| `tdd` | You want tests generated before implementation |
+
+## Resetting Failed Jobs
+
+When a job fails and you've fixed the issue, reset it to run again:
+
+```bash
+# View failed jobs
+worksplit status -v | grep FAIL
+
+# Reset a specific job (edit _jobstatus.json)
+# Change "status": "fail" to "status": "created"
+# Remove the "error": "..." line
+
+# Then run again
+worksplit run
+```
+
 ## Job File Format
 
 Each job file uses YAML frontmatter followed by markdown instructions:
@@ -318,3 +367,142 @@ If Job B depends on Job A's output:
 1. Name Job A alphabetically before Job B
 2. Include Job A's output file in Job B's context_files
 3. Run `worksplit run` - jobs process in order
+
+---
+
+## For AI Managers (Claude, GPT, etc.)
+
+This section contains guidance specifically for AI assistants using WorkSplit.
+
+### Batching Strategy
+
+**Batch by file, not by task.** If multiple tasks touch the same file:
+
+| Approach | Jobs | Ollama Calls | Risk |
+|----------|------|--------------|------|
+| One job per task | 7 | 14 (gen + verify each) | File conflicts |
+| One job per file | 4 | 8 (gen + verify each) | None |
+
+Example: Tasks 1, 2, 6, 7 all modify `main.rs` → Create ONE job that handles all four.
+
+### Mode Selection Guide
+
+```
+Is it a new file?
+  └─ Yes → Replace mode
+
+Is the change <50 lines across <3 locations?
+  └─ Yes → Edit mode
+  └─ No → Replace mode
+
+Does the change touch >10 similar patterns (e.g., test fixtures)?
+  └─ Yes → Replace mode (edit mode will likely fail)
+  └─ No → Edit mode is fine
+
+Is the file >500 lines and you're changing <20%?
+  └─ Yes → Edit mode
+  └─ No → Replace mode
+```
+
+### Handling Struct Field Additions
+
+Adding a field to a struct is tricky because:
+1. The struct definition needs updating
+2. All struct literals (especially in tests) need the new field
+
+**Recommended approach:**
+
+1. **Make the field optional or defaulted** in the struct:
+   ```rust
+   #[serde(default = "default_verify")]
+   pub verify: bool,
+   ```
+
+2. **Split into two jobs:**
+   - Job A (edit mode): Add field to struct definition + add helper methods
+   - Job B (replace mode): Regenerate the entire test module with `verify: false`
+
+3. **Or use replace mode for the whole file** if tests are <50% of the file
+
+### When Edit Mode Fails
+
+Edit mode fails when FIND text doesn't match exactly. Common causes:
+
+1. **Many similar patterns** - Each FIND must be unique
+2. **Whitespace mismatch** - Spaces vs tabs, trailing whitespace
+3. **Context too narrow** - Single-line FIND matches multiple places
+
+**Recovery strategy:**
+1. Check the error message for "Possible match at line X"
+2. If the job partially completed, assess what's done
+3. Either:
+   - Fix manually with targeted edits
+   - Reset and rewrite as replace mode job
+   - Split into smaller, more focused jobs
+
+### Token-Efficient Workflow
+
+```bash
+# 1. Create all job files first (batch the writes)
+# 2. Validate before running
+worksplit validate
+
+# 3. Run all jobs at once
+worksplit run
+
+# 4. Check summary only (don't read verbose output)
+worksplit status --summary
+
+# 5. Only investigate failures
+worksplit status --json | jq '.failures[]'
+```
+
+### Job File Template for AI Managers
+
+```markdown
+---
+context_files:
+  - path/to/relevant/file.rs
+output_dir: path/to/output/
+output_file: filename.rs
+verify: true  # Set to false for low-risk changes
+---
+
+# [Brief Title]
+
+## Requirements
+- [Requirement 1]
+- [Requirement 2]
+
+## Signatures
+\`\`\`rust
+fn function_name(args) -> ReturnType
+\`\`\`
+
+## Constraints
+- [Constraint 1]
+- [Constraint 2]
+
+## Formatting Notes
+- Uses 4-space indentation
+- [Other style notes from context files]
+```
+
+### Common Pitfalls
+
+1. **Don't read generated files** - Trust verification, check status only
+2. **Don't create too many small jobs** - Batch related changes
+3. **Don't use edit mode for mass updates** - Replace mode is safer
+4. **Don't forget `verify: false`** - Use it for simple/trusted changes
+5. **Don't mix concerns** - One job = one logical change
+
+### Estimating Success Probability
+
+| Job Type | Success Rate | Notes |
+|----------|--------------|-------|
+| Replace, single file | ~95% | Most reliable |
+| Replace, multi-file | ~90% | Slight coherence risk |
+| Edit, 1-3 locations | ~90% | Usually works |
+| Edit, 4-10 locations | ~70% | Needs unique FIND contexts |
+| Edit, 10+ locations | ~30% | Use replace mode instead |
+| Sequential | ~85% | Per-file recovery possible |

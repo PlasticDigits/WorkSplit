@@ -6,7 +6,7 @@ use std::sync::Arc;
 use tokio::sync::RwLock;
 
 use crate::error::StatusError;
-use crate::models::{JobStatus, JobStatusEntry};
+use crate::models::{JobStatus, JobStatusEntry, PartialEditState, FailedEdit};
 
 /// Thread-safe wrapper for StatusManager
 pub type SharedStatusManager = Arc<RwLock<StatusManager>>;
@@ -183,6 +183,7 @@ impl StatusManager {
                 JobStatus::PendingTestRun => summary.pending_test_run += 1,
                 JobStatus::Pass => summary.passed += 1,
                 JobStatus::Fail => summary.failed += 1,
+                JobStatus::Partial => summary.partial += 1,
             }
         }
         summary.total = self.entries.len();
@@ -195,12 +196,44 @@ impl StatusManager {
             .ok_or_else(|| StatusError::JobNotFound(job_id.to_string()))?;
         entry.update_status(JobStatus::Created);
         entry.error = None;
+        entry.partial_state = None;
         self.save()
     }
 
     /// Get all entries
     pub fn all_entries(&self) -> Vec<&JobStatusEntry> {
         self.entries.values().collect()
+    }
+
+    /// Set a job as partially completed with edit state
+    pub fn set_partial(&mut self, job_id: &str, state: PartialEditState) -> Result<(), StatusError> {
+        let entry = self.entries.get_mut(job_id)
+            .ok_or_else(|| StatusError::JobNotFound(job_id.to_string()))?;
+        entry.set_partial(state);
+        self.save()
+    }
+
+    /// Get the failed edits for a partial job (for --continue)
+    pub fn get_failed_edits(&self, job_id: &str) -> Option<Vec<FailedEdit>> {
+        self.entries.get(job_id)
+            .and_then(|e| e.partial_state.as_ref())
+            .map(|s| s.failed_edits.clone())
+    }
+
+    /// Clear partial state after successful retry
+    pub fn clear_partial_state(&mut self, job_id: &str) -> Result<(), StatusError> {
+        if let Some(entry) = self.entries.get_mut(job_id) {
+            entry.partial_state = None;
+        }
+        self.save()
+    }
+
+    /// Get all jobs with partial completion status
+    pub fn get_partial_jobs(&self) -> Vec<&JobStatusEntry> {
+        self.entries
+            .values()
+            .filter(|e| e.status == JobStatus::Partial)
+            .collect()
     }
 }
 
@@ -215,6 +248,7 @@ pub struct StatusSummary {
     pub pending_test_run: usize,
     pub passed: usize,
     pub failed: usize,
+    pub partial: usize,
 }
 
 impl std::fmt::Display for StatusSummary {
@@ -222,10 +256,11 @@ impl std::fmt::Display for StatusSummary {
         let pending = self.pending_test + self.pending_work + self.pending_verification + self.pending_test_run;
         write!(
             f,
-            "Total: {} | Created: {} | Pending: {} | Passed: {} | Failed: {}",
+            "Total: {} | Created: {} | Pending: {} | Partial: {} | Passed: {} | Failed: {}",
             self.total,
             self.created,
             pending,
+            self.partial,
             self.passed,
             self.failed
         )
@@ -314,5 +349,117 @@ mod tests {
             let manager = StatusManager::new(temp_dir.path()).unwrap();
             assert_eq!(manager.get("job1").unwrap().status, JobStatus::Pass);
         }
+    }
+
+    #[test]
+    fn test_set_partial_status() {
+        let (_temp_dir, mut manager) = create_test_manager();
+        
+        manager.sync_with_jobs(&["job1".to_string()]).unwrap();
+        
+        let state = PartialEditState {
+            successful_edits: vec![],
+            failed_edits: vec![],
+        };
+        manager.set_partial("job1", state).unwrap();
+        
+        let entry = manager.get("job1").unwrap();
+        assert_eq!(entry.status, JobStatus::Partial);
+        assert!(entry.partial_state.is_some());
+    }
+
+    #[test]
+    fn test_get_failed_edits() {
+        let (_temp_dir, mut manager) = create_test_manager();
+        
+        manager.sync_with_jobs(&["job1".to_string()]).unwrap();
+        
+        let state = PartialEditState {
+            successful_edits: vec![],
+            failed_edits: vec![],
+        };
+        manager.set_partial("job1", state).unwrap();
+        
+        let failed_edits = manager.get_failed_edits("job1").unwrap();
+        assert_eq!(failed_edits.len(), 0);
+    }
+
+    #[test]
+    fn test_clear_partial_state() {
+        let (_temp_dir, mut manager) = create_test_manager();
+        
+        manager.sync_with_jobs(&["job1".to_string()]).unwrap();
+        
+        let state = PartialEditState {
+            successful_edits: vec![],
+            failed_edits: vec![],
+        };
+        manager.set_partial("job1", state).unwrap();
+        
+        assert!(manager.get("job1").unwrap().partial_state.is_some());
+        
+        manager.clear_partial_state("job1").unwrap();
+        
+        assert!(manager.get("job1").unwrap().partial_state.is_none());
+    }
+
+    #[test]
+    fn test_get_summary_with_partial() {
+        let (_temp_dir, mut manager) = create_test_manager();
+        
+        manager.sync_with_jobs(&["job1".to_string(), "job2".to_string(), "job3".to_string()]).unwrap();
+        
+        let state = PartialEditState {
+            successful_edits: vec![],
+            failed_edits: vec![],
+        };
+        manager.set_partial("job2", state).unwrap();
+        
+        let summary = manager.get_summary();
+        assert_eq!(summary.total, 3);
+        assert_eq!(summary.created, 2);
+        assert_eq!(summary.partial, 1);
+    }
+
+    #[test]
+    fn test_partial_job_persistence() {
+        let temp_dir = TempDir::new().unwrap();
+        
+        // Create and save
+        {
+            let mut manager = StatusManager::new(temp_dir.path()).unwrap();
+            manager.sync_with_jobs(&["job1".to_string()]).unwrap();
+            
+            let state = PartialEditState {
+                successful_edits: vec![],
+                failed_edits: vec![],
+            };
+            manager.set_partial("job1", state).unwrap();
+        }
+        
+        // Load again
+        {
+            let manager = StatusManager::new(temp_dir.path()).unwrap();
+            let entry = manager.get("job1").unwrap();
+            assert_eq!(entry.status, JobStatus::Partial);
+            assert!(entry.partial_state.is_some());
+        }
+    }
+
+    #[test]
+    fn test_get_partial_jobs() {
+        let (_temp_dir, mut manager) = create_test_manager();
+        
+        manager.sync_with_jobs(&["job1".to_string(), "job2".to_string(), "job3".to_string()]).unwrap();
+        
+        let state = PartialEditState {
+            successful_edits: vec![],
+            failed_edits: vec![],
+        };
+        manager.set_partial("job2", state).unwrap();
+        
+        let partial_jobs = manager.get_partial_jobs();
+        assert_eq!(partial_jobs.len(), 1);
+        assert_eq!(partial_jobs[0].id, "job2");
     }
 }

@@ -43,6 +43,7 @@ pub fn show_status(project_root: &PathBuf, verbose: bool) -> Result<(), WorkSpli
                     JobStatus::PendingTestRun => "PENDING TEST RUN",
                     JobStatus::Pass => "PASS",
                     JobStatus::Fail => "FAIL",
+                    JobStatus::Partial => "PARTIAL",
                 };
 
                 print!("  {} [{}]", entry.id, status_str);

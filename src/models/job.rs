@@ -19,12 +19,16 @@ pub enum JobTemplate {
 /// Output mode: "replace" (default) generates full files, "edit" applies surgical changes,
 /// "split" breaks a large file into smaller modules
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
-#[serde(rename_all = "lowercase")]
+#[serde(rename_all = "snake_case")]
 pub enum OutputMode {
     #[default]
     Replace,
     Edit,
     Split,
+    /// Batch text replacements using AFTER/INSERT pattern
+    ReplacePattern,
+    /// Update struct literals in test fixtures
+    UpdateFixtures,
 }
 
 /// Metadata parsed from job file YAML frontmatter
@@ -57,6 +61,20 @@ pub struct JobMetadata {
     /// Target file for split mode (the large file to split into modules)
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub target_file: Option<PathBuf>,
+    /// Whether to run verification phase (defaults to true)
+    /// Set to false for simple/trusted jobs to skip verification and save an Ollama call
+    #[serde(default = "default_verify")]
+    pub verify: bool,
+    /// Struct name for update_fixtures mode
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub struct_name: Option<String>,
+    /// New field to add for update_fixtures mode (e.g., "verify: true")
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub new_field: Option<String>,
+}
+
+fn default_verify() -> bool {
+    true
 }
 
 impl JobMetadata {
@@ -124,6 +142,24 @@ impl JobMetadata {
                 return Err(JobValidationError::SplitModeWithSequential);
             }
         }
+        // Validate replace_pattern mode configuration
+        if self.mode == OutputMode::ReplacePattern {
+            if self.target_files.is_none() {
+                return Err(JobValidationError::ReplacePatternMissingTargetFiles);
+            }
+        }
+        // Validate update_fixtures mode configuration
+        if self.mode == OutputMode::UpdateFixtures {
+            if self.target_files.is_none() {
+                return Err(JobValidationError::UpdateFixturesMissingTargetFiles);
+            }
+            if self.struct_name.is_none() {
+                return Err(JobValidationError::UpdateFixturesMissingStructName);
+            }
+            if self.new_field.is_none() {
+                return Err(JobValidationError::UpdateFixturesMissingNewField);
+            }
+        }
         Ok(())
     }
 
@@ -177,6 +213,31 @@ impl JobMetadata {
         } else {
             vec![self.output_path()]
         }
+    }
+
+    /// Check if verification should be run for this job
+    pub fn should_verify(&self) -> bool {
+        self.verify
+    }
+
+    /// Check if this job uses replace_pattern mode
+    pub fn is_replace_pattern_mode(&self) -> bool {
+        self.mode == OutputMode::ReplacePattern
+    }
+
+    /// Check if this job uses update_fixtures mode
+    pub fn is_update_fixtures_mode(&self) -> bool {
+        self.mode == OutputMode::UpdateFixtures
+    }
+
+    /// Get struct_name for update_fixtures mode
+    pub fn get_struct_name(&self) -> Option<&String> {
+        self.struct_name.as_ref()
+    }
+
+    /// Get new_field for update_fixtures mode
+    pub fn get_new_field(&self) -> Option<&String> {
+        self.new_field.as_ref()
     }
 }
 
@@ -235,6 +296,14 @@ pub enum JobValidationError {
     SplitMissingOutputFiles,
     #[error("split mode cannot be combined with sequential mode")]
     SplitModeWithSequential,
+    #[error("replace_pattern mode requires target_files")]
+    ReplacePatternMissingTargetFiles,
+    #[error("update_fixtures mode requires target_files")]
+    UpdateFixturesMissingTargetFiles,
+    #[error("update_fixtures mode requires struct_name")]
+    UpdateFixturesMissingStructName,
+    #[error("update_fixtures mode requires new_field")]
+    UpdateFixturesMissingNewField,
 }
 
 #[cfg(test)]
@@ -253,6 +322,9 @@ mod tests {
             mode: OutputMode::Replace,
             target_files: None,
             target_file: None,
+            verify: true,
+            struct_name: None,
+            new_field: None,
         };
         assert!(metadata.validate(2).is_ok());
         assert!(metadata.validate(1).is_err());
@@ -270,6 +342,9 @@ mod tests {
             mode: OutputMode::Replace,
             target_files: None,
             target_file: None,
+            verify: true,
+            struct_name: None,
+            new_field: None,
         };
         assert!(matches!(
             metadata.validate(2),
@@ -289,6 +364,9 @@ mod tests {
             mode: OutputMode::Replace,
             target_files: None,
             target_file: None,
+            verify: true,
+            struct_name: None,
+            new_field: None,
         };
         assert_eq!(
             metadata.output_path(),
@@ -308,6 +386,9 @@ mod tests {
             mode: OutputMode::Replace,
             target_files: None,
             target_file: None,
+            verify: true,
+            struct_name: None,
+            new_field: None,
         };
         assert!(metadata_with_test.is_tdd_enabled());
 
@@ -321,6 +402,9 @@ mod tests {
             mode: OutputMode::Replace,
             target_files: None,
             target_file: None,
+            verify: true,
+            struct_name: None,
+            new_field: None,
         };
         assert!(!metadata_without_test.is_tdd_enabled());
     }
@@ -337,6 +421,9 @@ mod tests {
             mode: OutputMode::Replace,
             target_files: None,
             target_file: None,
+            verify: true,
+            struct_name: None,
+            new_field: None,
         };
         assert_eq!(
             metadata_with_test.test_path(),
@@ -353,6 +440,9 @@ mod tests {
             mode: OutputMode::Replace,
             target_files: None,
             target_file: None,
+            verify: true,
+            struct_name: None,
+            new_field: None,
         };
         assert_eq!(metadata_without_test.test_path(), None);
     }
@@ -369,6 +459,9 @@ mod tests {
             mode: OutputMode::Replace,
             target_files: None,
             target_file: None,
+            verify: true,
+            struct_name: None,
+            new_field: None,
         };
         assert!(matches!(
             metadata.validate(2),
@@ -466,6 +559,9 @@ sequential: true
             mode: OutputMode::Replace,
             target_files: None,
             target_file: None,
+            verify: true,
+            struct_name: None,
+            new_field: None,
         };
         let output_files = metadata.get_output_files();
         assert_eq!(output_files.len(), 1);
@@ -484,6 +580,9 @@ sequential: true
             mode: OutputMode::Replace,
             target_files: None,
             target_file: None,
+            verify: true,
+            struct_name: None,
+            new_field: None,
         };
         assert!(matches!(
             metadata.validate(2),
@@ -503,6 +602,9 @@ sequential: true
             mode: OutputMode::Replace,
             target_files: None,
             target_file: None,
+            verify: true,
+            struct_name: None,
+            new_field: None,
         };
         assert!(matches!(
             metadata.validate(2),
@@ -522,6 +624,9 @@ sequential: true
             mode: OutputMode::Replace,
             target_files: None,
             target_file: None,
+            verify: true,
+            struct_name: None,
+            new_field: None,
         };
         assert!(!metadata_replace.is_edit_mode());
 
@@ -535,6 +640,9 @@ sequential: true
             mode: OutputMode::Edit,
             target_files: None,
             target_file: None,
+            verify: true,
+            struct_name: None,
+            new_field: None,
         };
         assert!(metadata_edit.is_edit_mode());
     }
@@ -554,6 +662,9 @@ sequential: true
                 PathBuf::from("src/lib.rs"),
             ]),
             target_file: None,
+            verify: true,
+            struct_name: None,
+            new_field: None,
         };
         let target_files = metadata_with_targets.get_target_files();
         assert_eq!(target_files.len(), 2);
@@ -570,6 +681,9 @@ sequential: true
             mode: OutputMode::Edit,
             target_files: None,
             target_file: None,
+            verify: true,
+            struct_name: None,
+            new_field: None,
         };
         let target_files = metadata_without_targets.get_target_files();
         assert_eq!(target_files.len(), 1);
@@ -588,6 +702,9 @@ sequential: true
             mode: OutputMode::Edit,
             target_files: Some(vec![]),
             target_file: None,
+            verify: true,
+            struct_name: None,
+            new_field: None,
         };
         assert!(matches!(
             metadata.validate(2),
@@ -607,6 +724,9 @@ sequential: true
             mode: OutputMode::Edit,
             target_files: Some(vec![PathBuf::from("src/main.rs"), PathBuf::from("")]),
             target_file: None,
+            verify: true,
+            struct_name: None,
+            new_field: None,
         };
         assert!(matches!(
             metadata.validate(2),
@@ -626,6 +746,9 @@ sequential: true
             mode: OutputMode::Edit,
             target_files: Some(vec![PathBuf::from("src/main.rs")]),
             target_file: None,
+            verify: true,
+            struct_name: None,
+            new_field: None,
         };
         assert!(matches!(
             metadata.validate(2),
@@ -689,6 +812,9 @@ output_file: service.rs
             mode: OutputMode::Split,
             target_files: None,
             target_file: Some(PathBuf::from("src/runner.rs")),
+            verify: true,
+            struct_name: None,
+            new_field: None,
         };
         assert!(metadata_split.is_split_mode());
         assert!(!metadata_split.is_edit_mode());
@@ -707,6 +833,9 @@ output_file: service.rs
             mode: OutputMode::Split,
             target_files: None,
             target_file: Some(PathBuf::from("src/core/runner.rs")),
+            verify: true,
+            struct_name: None,
+            new_field: None,
         };
         assert!(valid_metadata.validate(2).is_ok());
     }
@@ -723,6 +852,9 @@ output_file: service.rs
             mode: OutputMode::Split,
             target_files: None,
             target_file: None, // Missing!
+            verify: true,
+            struct_name: None,
+            new_field: None,
         };
         assert!(matches!(
             metadata.validate(2),
@@ -742,6 +874,9 @@ output_file: service.rs
             mode: OutputMode::Split,
             target_files: None,
             target_file: Some(PathBuf::from("src/core/runner.rs")),
+            verify: true,
+            struct_name: None,
+            new_field: None,
         };
         assert!(matches!(
             metadata.validate(2),
@@ -761,6 +896,9 @@ output_file: service.rs
             mode: OutputMode::Split,
             target_files: None,
             target_file: Some(PathBuf::from("src/core/runner.rs")),
+            verify: true,
+            struct_name: None,
+            new_field: None,
         };
         assert!(matches!(
             metadata.validate(2),

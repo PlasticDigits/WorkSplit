@@ -149,6 +149,9 @@ mod tests {
             mode: OutputMode::Replace,
             target_files: None,
             target_file: None,
+            verify: true,
+            struct_name: None,
+            new_field: None,
         }
     }
 
@@ -163,6 +166,9 @@ mod tests {
             mode: OutputMode::Replace,
             target_files: None,
             target_file: None,
+            verify: true,
+            struct_name: None,
+            new_field: None,
         }
     }
 
@@ -177,6 +183,9 @@ mod tests {
             mode: OutputMode::Edit,
             target_files: Some(targets.into_iter().map(PathBuf::from).collect()),
             target_file: None,
+            verify: true,
+            struct_name: None,
+            new_field: None,
         }
     }
 

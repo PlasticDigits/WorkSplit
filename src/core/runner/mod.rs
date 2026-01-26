@@ -428,17 +428,18 @@ impl Runner {
                 full_output_paths.push(full_path);
             }
         } else if job.metadata.is_edit_mode() {
-            let files = edit::process_edit_mode(
+            let result = edit::process_edit_mode(
                 &self.ollama,
                 &self.project_root,
                 &self.config,
                 &job,
                 &context_files,
                 &edit_prompt,
+                false, // dry_run
             ).await?;
-            generated_files = files.0;
-            full_output_paths = files.1;
-            total_lines = files.2;
+            generated_files = result.generated_files;
+            full_output_paths = result.output_paths;
+            total_lines = result.total_lines;
         } else if job.metadata.is_sequential() {
             let files = sequential::process_sequential_mode(
                 &self.ollama,

@@ -65,12 +65,59 @@ END
    END
    ```
 
+## Handling Many Similar Patterns
+
+When adding a field to many struct literals (e.g., test fixtures), each FIND must be UNIQUE:
+
+**BAD** - This pattern appears multiple times:
+```
+FIND:
+    target_file: None,
+};
+REPLACE:
+    target_file: None,
+    new_field: true,
+};
+END
+```
+
+**GOOD** - Include unique surrounding context for EACH occurrence:
+```
+FIND:
+    target_file: None,
+};
+assert!(metadata.validate(2).is_ok());
+REPLACE:
+    target_file: None,
+    new_field: true,
+};
+assert!(metadata.validate(2).is_ok());
+END
+
+FIND:
+    target_file: None,
+};
+assert_eq!(metadata.output_path(),
+REPLACE:
+    target_file: None,
+    new_field: true,
+};
+assert_eq!(metadata.output_path(),
+END
+```
+
+**ALTERNATIVE** - For many similar patterns, consider:
+1. Editing the struct definition only (add field with `#[serde(default)]`)
+2. Asking the manager to use replace mode for the entire file
+3. Splitting into multiple jobs: one for core logic, one for tests
+
 ## Common Mistakes to Avoid
 
 - **Wrong indentation**: If the file uses 4 spaces, don't use 2 spaces or tabs
 - **Missing context**: Single-line FINDs often match multiple places
 - **Modifying FIND after REPLACE**: If edit A changes text that edit B needs to find, order them correctly
 - **Forgetting END**: Every FIND/REPLACE pair must end with END on its own line
+- **Too many similar edits**: If you need 10+ nearly identical edits, the job should probably use replace mode instead
 
 ## Response Structure
 

@@ -19,15 +19,16 @@
   },
   {
     "id": "batch_004_cli_options",
-    "status": "created",
+    "status": "fail",
     "created_at": "2026-01-25T15:02:52.927285157Z",
-    "updated_at": "2026-01-25T15:17:36.240639513Z"
+    "updated_at": "2026-01-26T14:35:53.325034094Z",
+    "error": "Edit failed: FIND text not found in src/main.rs.\nSearched for: \"Commands::Run {\\n            job,\\n            resume,\\n            reset,\\n            model,\\n         \"\n\nPossible match at line 152: \"        Commands::Run {\""
   },
   {
     "id": "batch_005_module_update",
-    "status": "created",
+    "status": "pass",
     "created_at": "2026-01-25T15:02:52.927287170Z",
-    "updated_at": "2026-01-25T15:17:36.288940179Z"
+    "updated_at": "2026-01-26T14:36:13.238194857Z"
   },
   {
     "id": "edit_001_job_metadata",
@@ -70,6 +71,54 @@
     "status": "pass",
     "created_at": "2026-01-25T11:02:18.410914998Z",
     "updated_at": "2026-01-25T11:08:04.740658539Z"
+  },
+  {
+    "id": "enhance_001_models",
+    "status": "pass",
+    "created_at": "2026-01-26T14:32:02.281281712Z",
+    "updated_at": "2026-01-26T15:27:42.210063595Z"
+  },
+  {
+    "id": "enhance_002_parser_fuzzy",
+    "status": "pass",
+    "created_at": "2026-01-26T14:32:02.281286341Z",
+    "updated_at": "2026-01-26T14:49:52.331560820Z"
+  },
+  {
+    "id": "enhance_003_status_tracking",
+    "status": "pass",
+    "created_at": "2026-01-26T14:32:02.281290820Z",
+    "updated_at": "2026-01-26T15:24:55.573494805Z"
+  },
+  {
+    "id": "enhance_004_runner_edit",
+    "status": "pass",
+    "created_at": "2026-01-26T14:32:02.281294897Z",
+    "updated_at": "2026-01-26T15:16:23.481177886Z"
+  },
+  {
+    "id": "enhance_005_cli_deps",
+    "status": "pass",
+    "created_at": "2026-01-26T14:32:02.281299216Z",
+    "updated_at": "2026-01-26T14:58:15.813493628Z"
+  },
+  {
+    "id": "enhance_006_error_suggestions",
+    "status": "pass",
+    "created_at": "2026-01-26T14:32:02.281303383Z",
+    "updated_at": "2026-01-26T14:58:55.007183909Z"
+  },
+  {
+    "id": "enhance_007_parser_patterns",
+    "status": "pass",
+    "created_at": "2026-01-26T14:34:34.292661085Z",
+    "updated_at": "2026-01-26T15:17:28.498354234Z"
+  },
+  {
+    "id": "enhance_008_runner_new_modes",
+    "status": "pass",
+    "created_at": "2026-01-26T14:34:34.292667437Z",
+    "updated_at": "2026-01-26T15:04:13.408912153Z"
   },
   {
     "id": "fix_001_path_heading_extraction",
@@ -169,5 +218,29 @@
     "status": "pass",
     "created_at": "2026-01-25T15:25:00.385242062Z",
     "updated_at": "2026-01-25T15:25:29.328002683Z"
+  },
+  {
+    "id": "upgrade_001_main_rs",
+    "status": "pass",
+    "created_at": "2026-01-26T13:52:47.874670546Z",
+    "updated_at": "2026-01-26T13:54:40.985020116Z"
+  },
+  {
+    "id": "upgrade_002_status_rs",
+    "status": "pass",
+    "created_at": "2026-01-26T13:52:47.874671899Z",
+    "updated_at": "2026-01-26T13:56:18.832995435Z"
+  },
+  {
+    "id": "upgrade_003_run_rs",
+    "status": "pass",
+    "created_at": "2026-01-26T13:52:47.874674614Z",
+    "updated_at": "2026-01-26T13:59:41.640337944Z"
+  },
+  {
+    "id": "upgrade_005_validate_rs",
+    "status": "pass",
+    "created_at": "2026-01-26T13:52:47.874676838Z",
+    "updated_at": "2026-01-26T14:14:16.529954523Z"
   }
 ]
