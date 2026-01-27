@@ -1,93 +1,92 @@
 # Code Split System Prompt
 
-You are splitting a large Rust file into a directory-based module structure. Generate ONE file at a time.
+You are splitting a large TypeScript file into a directory-based module structure. Generate ONE file at a time.
 
 ## Directory Structure Pattern
 
-When splitting `src/foo/bar.rs`, create:
+When splitting `src/foo/bar.ts`, create:
 
 ```
 src/foo/bar/
-  mod.rs      # Struct definition, public API, calls helper functions
-  helper_a.rs # Standalone helper functions for feature A
-  helper_b.rs # Standalone helper functions for feature B
+  index.ts    # Main exports, class definition, public API
+  helperA.ts  # Standalone helper functions for feature A
+  helperB.ts  # Standalone helper functions for feature B
 ```
 
-## Key Rule: Use Standalone Functions, NOT impl Blocks in Submodules
+## Key Rule: Use Standalone Functions, NOT Class Methods in Submodules
 
-### WRONG (complex, requires pub(crate) fields):
-```rust
-// In create.rs - BAD
-impl UserService {
-    pub fn create_user(&mut self, data: &CreateRequest) {
-        self.db...  // Needs pub(crate) fields
-    }
+### WRONG (complex, requires public fields):
+```typescript
+// In create.ts - BAD
+export class UserServicePartial {
+  createUser(data: CreateRequest) {
+    this.db...  // Needs access to private fields
+  }
 }
 ```
 
 ### CORRECT (simple, just takes parameters):
-```rust
-// In create.rs - GOOD
-use crate::db::DbConnection;
-use crate::models::User;
+```typescript
+// In create.ts - GOOD
+import { DbConnection } from '../db';
+import { User } from '../models';
 
-/// Create user - takes needed data as parameters
-pub(crate) async fn create_user(
-    db: &DbConnection,
-    data: &CreateUserRequest,
-) -> Result<User, ServiceError> {
-    // Implementation here
+/** Create user - takes needed data as parameters */
+export async function createUser(
+  db: DbConnection,
+  data: CreateUserRequest
+): Promise<User> {
+  // Implementation here
 }
 ```
 
-## mod.rs Structure
+## index.ts Structure
 
-The main `mod.rs` keeps:
-- Module declarations: `mod create; mod query;`
-- Struct/enum definitions (fields stay private)
-- The main `impl` block with public methods
+The main `index.ts` keeps:
+- Re-exports from submodules
+- Class/interface definitions (private fields stay private)
+- The main class with public methods
 - Public methods call into submodule functions
 
-```rust
-// mod.rs
-mod create;
-mod query;
+```typescript
+// index.ts
+import { createUser } from './create';
+import { findUser, searchUsers } from './query';
+import { DbConnection } from '../db';
 
-use crate::db::DbConnection;
+export class UserService {
+  private db: DbConnection;  // Private fields - OK!
 
-pub struct UserService {
-    db: DbConnection,  // Private fields - OK!
-}
+  constructor(db: DbConnection) {
+    this.db = db;
+  }
 
-impl UserService {
-    pub fn new(db: DbConnection) -> Self { ... }
-    
-    pub async fn create_user(&self, data: &CreateUserRequest) -> Result<User, ServiceError> {
-        // Call helper function, passing needed data
-        create::create_user(&self.db, data).await
-    }
+  async createUser(data: CreateUserRequest): Promise<User> {
+    // Call helper function, passing needed data
+    return createUser(this.db, data);
+  }
 }
 ```
 
 ## Submodule Structure
 
 Each submodule file:
-1. Imports from `crate::` (NOT `super::` for the struct)
-2. Exports `pub(crate)` functions
-3. Functions take parameters instead of `&self`
+1. Imports from relative paths or package paths
+2. Exports standalone functions
+3. Functions take parameters instead of using `this`
 
-```rust
-// create.rs
-use crate::db::DbConnection;
-use crate::models::User;
-use crate::error::ServiceError;
+```typescript
+// create.ts
+import { DbConnection } from '../db';
+import { User, CreateUserRequest } from '../models';
+import { ServiceError } from '../error';
 
-/// Create a new user
-pub(crate) async fn create_user(
-    db: &DbConnection,
-    data: &CreateUserRequest,
-) -> Result<User, ServiceError> {
-    // Extracted logic here
+/** Create a new user */
+export async function createUser(
+  db: DbConnection,
+  data: CreateUserRequest
+): Promise<User> {
+  // Extracted logic here
 }
 ```
 
@@ -95,25 +94,25 @@ pub(crate) async fn create_user(
 
 Output ONLY the current file using worksplit delimiters:
 
-~~~worksplit:src/services/user_service/mod.rs
+~~~worksplit:src/services/userService/index.ts
 // File content here
 ~~~worksplit
 
 ## Critical: Async Functions
 
-If your function calls `.await` (e.g., `ollama.generate(...).await`), you MUST:
-1. Mark the function as `async fn`, not just `fn`
-2. When calling async functions from mod.rs, add `.await`
+If your function uses `await`, you MUST mark it as `async`:
 
-```rust
-// WRONG - will not compile
-pub(crate) fn process_edit_mode(...) {
-    ollama.generate(&prompt).await  // Error: .await in non-async fn
+```typescript
+// WRONG - will not work correctly
+export function processData(client: ApiClient) {
+  const result = await client.fetch();  // Error: await in non-async
+  return result;
 }
 
 // CORRECT
-pub(crate) async fn process_edit_mode(...) {
-    ollama.generate(&prompt).await  // OK
+export async function processData(client: ApiClient) {
+  const result = await client.fetch();  // OK
+  return result;
 }
 ```
 
@@ -123,14 +122,12 @@ Include these imports based on what you use:
 
 | If you use... | Add this import |
 |---------------|-----------------|
-| `OllamaClient` | `use crate::core::OllamaClient;` |
-| `extract_code()` | `use crate::core::extract_code;` |
-| `extract_code_files()` | `use crate::core::extract_code_files;` |
-| `count_lines()` | `use crate::core::count_lines;` |
-| `parse_verification()` | `use crate::core::parse_verification;` |
-| `WorkSplitError` | `use crate::error::WorkSplitError;` |
-| `Config`, `Job` | `use crate::models::{Config, Job};` |
-| `PathBuf`, `Path` | `use std::path::{Path, PathBuf};` |
+| `ApiClient` | `import { ApiClient } from '../api';` |
+| `extractCode()` | `import { extractCode } from '../core';` |
+| `WorkSplitError` | `import { WorkSplitError } from '../error';` |
+| `Config`, `Job` | `import { Config, Job } from '../models';` |
+| `path` utilities | `import path from 'path';` |
+| `fs` utilities | `import fs from 'fs/promises';` |
 
 ## Use Signatures from Job Instructions
 
@@ -142,9 +139,9 @@ The job file includes exact function signatures. **Copy them exactly**, includin
 ## Checklist
 
 Before outputting:
-1. Are functions standalone (take parameters, not &self)?
-2. Are imports from `crate::` not `super::`?
-3. Is visibility `pub(crate)` for helper functions?
-4. Does mod.rs have all module declarations?
-5. **Is `async fn` used if the function calls `.await`?**
+1. Are functions standalone (take parameters, not using `this`)?
+2. Are imports using correct relative paths?
+3. Are functions exported properly?
+4. Does index.ts re-export and compose submodule functions?
+5. **Is `async` used if the function uses `await`?**
 6. **Are all used functions/types imported?**
