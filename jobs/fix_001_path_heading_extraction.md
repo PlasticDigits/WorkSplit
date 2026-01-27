@@ -1,9 +1,9 @@
 ---
 mode: edit
 target_files:
-  - src/core/parser.rs
-output_dir: src/core/
-output_file: parser.rs
+  - src/core/parser/extract.rs
+output_dir: src/core/parser/
+output_file: extract.rs
 ---
 
 # Fix Code Extraction for Path-as-Heading Format

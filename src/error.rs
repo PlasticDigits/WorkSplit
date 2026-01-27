@@ -104,6 +104,9 @@ pub enum WorkSplitError {
 
     #[error("Job already exists: {0}")]
     JobAlreadyExists(String),
+
+    #[error("Initialization error: {0}")]
+    InitError(String),
 }
 
 /// Errors related to job file parsing

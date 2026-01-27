@@ -10,10 +10,12 @@
 //! - **core**: Core functionality (runner, jobs, status, ollama client, parser)
 //! - **models**: Data structures (config, job, status)
 //! - **error**: Error types
+//! - **templates**: Language-specific templates for project initialization
 
 pub mod commands;
 pub mod core;
 pub mod error;
 pub mod models;
+pub mod templates;
 
 pub use error::{Result, WorkSplitError};

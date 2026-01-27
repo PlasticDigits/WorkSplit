@@ -8,9 +8,10 @@ mod commands;
 mod core;
 mod error;
 mod models;
+mod templates;
 
 use commands::{cancel_jobs, create_new_job, init_project, print_validation_result, retry_job, run_jobs, show_status, validate_jobs, RunOptions};
-use models::JobTemplate;
+use models::{JobTemplate, Language};
 
 /// WorkSplit - Ollama-powered job orchestrator for code generation
 #[derive(Parser)]
@@ -32,6 +33,10 @@ enum Commands {
         /// Project directory (defaults to current directory)
         #[arg(short, long)]
         path: Option<PathBuf>,
+
+        /// Programming language for the project (prompts interactively if not specified)
+        #[arg(short, long, value_enum)]
+        lang: Option<Language>,
     },
 
     /// Reset job status
@@ -157,9 +162,9 @@ async fn main() {
         .init();
 
     let result = match cli.command {
-        Commands::Init { path } => {
+        Commands::Init { path, lang } => {
             let project_root = path.unwrap_or_else(|| std::env::current_dir().unwrap());
-            init_project(&project_root)
+            init_project(&project_root, lang)
         }
 
         Commands::Reset { job, status } => {

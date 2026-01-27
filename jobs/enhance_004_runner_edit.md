@@ -1,7 +1,7 @@
 ---
 context_files:
   - src/core/runner/edit.rs
-  - src/core/parser_edit.rs
+  - src/core/parser/edit.rs
 output_dir: src/core/runner/
 output_file: edit.rs
 verify: false

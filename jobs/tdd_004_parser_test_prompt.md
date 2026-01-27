@@ -1,8 +1,8 @@
 ---
 context_files:
-  - src/core/parser.rs
-output_dir: src/core/
-output_file: parser.rs
+  - src/core/parser/prompts.rs
+output_dir: src/core/parser/
+output_file: prompts.rs
 ---
 
 # Add Test Prompt Assembly Function to Parser

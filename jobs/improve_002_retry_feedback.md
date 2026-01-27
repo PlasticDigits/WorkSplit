@@ -1,9 +1,9 @@
 ---
 context_files:
   - src/core/runner/mod.rs
-  - src/core/parser.rs
-output_dir: src/core/
-output_file: runner.rs
+  - src/core/parser/extract.rs
+output_dir: src/core/runner/
+output_file: mod.rs
 ---
 
 # Retry with Feedback on Verification Failure

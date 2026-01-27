@@ -1,9 +1,9 @@
 ---
-output_dir: src/core/
-output_file: parser.rs
+output_dir: src/core/parser/
+output_file: extract.rs
 mode: edit
 target_files:
-  - src/core/parser.rs
+  - src/core/parser/extract.rs
 verify: false
 ---
 

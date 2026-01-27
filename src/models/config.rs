@@ -1,9 +1,29 @@
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 
+use super::Language;
+
+/// Project-level configuration
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ProjectConfig {
+    /// Programming language for this project
+    #[serde(default)]
+    pub language: Language,
+}
+
+impl Default for ProjectConfig {
+    fn default() -> Self {
+        Self {
+            language: Language::default(),
+        }
+    }
+}
+
 /// Configuration loaded from worksplit.toml
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Config {
+    #[serde(default)]
+    pub project: ProjectConfig,
     #[serde(default)]
     pub ollama: OllamaConfig,
     #[serde(default)]
@@ -17,6 +37,7 @@ pub struct Config {
 impl Default for Config {
     fn default() -> Self {
         Self {
+            project: ProjectConfig::default(),
             ollama: OllamaConfig::default(),
             limits: LimitsConfig::default(),
             behavior: BehaviorConfig::default(),
@@ -213,10 +234,12 @@ pub enum ConfigError {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::models::Language;
 
     #[test]
     fn test_default_config() {
         let config = Config::default();
+        assert_eq!(config.project.language, Language::Rust);
         assert_eq!(config.ollama.url, "http://localhost:11434");
         assert_eq!(config.ollama.model, "qwen-32k:latest");
         assert_eq!(config.ollama.timeout_seconds, 300);
@@ -245,6 +268,9 @@ mod tests {
     #[test]
     fn test_parse_toml() {
         let toml_str = r#"
+[project]
+language = "typescript"
+
 [ollama]
 url = "http://custom:8080"
 model = "codellama"
@@ -257,11 +283,24 @@ max_output_lines = 500
 stream_output = false
 "#;
         let config: Config = toml::from_str(toml_str).unwrap();
+        assert_eq!(config.project.language, Language::Typescript);
         assert_eq!(config.ollama.url, "http://custom:8080");
         assert_eq!(config.ollama.model, "codellama");
         assert_eq!(config.ollama.timeout_seconds, 120);
         assert_eq!(config.limits.max_output_lines, 500);
         assert_eq!(config.limits.max_context_lines, 1000); // default
         assert!(!config.behavior.stream_output);
+    }
+
+    #[test]
+    fn test_parse_toml_without_project() {
+        let toml_str = r#"
+[ollama]
+url = "http://custom:8080"
+model = "codellama"
+"#;
+        let config: Config = toml::from_str(toml_str).unwrap();
+        assert_eq!(config.project.language, Language::Rust); // default
+        assert_eq!(config.ollama.url, "http://custom:8080");
     }
 }

@@ -27,13 +27,32 @@ After running, edit the generated `jobs/<name>.md` to add specific requirements.
 
 ### When to Use Each Template
 
-| Template | Use When |
-|----------|----------|
-| `replace` | Creating new files or completely rewriting existing ones |
-| `edit` | Making 1-10 surgical changes to existing files |
-| `split` | A file exceeds 900 lines and needs to be modularized |
-| `sequential` | Generating multiple interdependent files |
-| `tdd` | You want tests generated before implementation |
+| Template | Use When | Reliability |
+|----------|----------|-------------|
+| `replace` | Creating new files or completely rewriting existing ones | High ✓ |
+| `edit` | Making 2-5 small, isolated changes to existing files | Medium ⚠ |
+| `split` | A file exceeds 900 lines and needs to be modularized | High ✓ |
+| `sequential` | Generating multiple interdependent files | High ✓ |
+| `tdd` | You want tests generated before implementation | High ✓ |
+
+### Edit Mode Reliability Warning
+
+**Edit mode has ~50-60% success rate** on complex changes. Common failure modes:
+- Thinking loops (LLM gets stuck reasoning without producing output)
+- Whitespace mismatches (tabs vs spaces, trailing whitespace)
+- "Edit mode produced no edits" (parser can't extract FIND/REPLACE blocks)
+
+**Decision guide:**
+
+| Change Size | Recommendation |
+|------------|----------------|
+| <10 lines, 1-2 locations | **Manual edit** - faster and more reliable |
+| 10-50 lines, single file | **Edit mode** - worth trying with good context |
+| 50-200 lines, single file | **Replace mode** with `target_files` |
+| Multiple files, small changes | **Separate edit jobs** per file, or manual |
+| New file or >50% rewrite | **Replace mode** always |
+
+**If edit mode fails twice, switch to replace mode or manual edit.**
 
 ## Resetting Failed Jobs
 
@@ -173,18 +192,27 @@ Edit mode is sensitive to exact text matching. To ensure successful edits:
 - Trailing whitespace differences
 - Case sensitivity mismatches
 
-**When to Use Edit Mode:**
-- Adding a field to a struct (1-5 lines change)
-- Modifying a function signature
-- Adding an import or export
-- Small bug fixes
-- Any change where you're modifying <50 lines total
+**When Edit Mode Works Well:**
+- Single FIND/REPLACE block in one file
+- Adding a field to a struct (with good surrounding context)
+- Adding an import statement
+- Modifying a function signature (single location)
+- Changes where the FIND text is unique and unambiguous
 
-**When NOT to Use Edit Mode:**
-- Creating new files (use replace mode)
-- Large refactors (use replace or sequential)
-- Changes spanning >50% of a file
-- Find/replace drift risk (prefer replace mode)
+**When to Skip Edit Mode (Use Replace or Manual):**
+- <10 lines of changes → just edit manually, it's faster
+- Changes to multiple locations in the same file → high failure rate
+- Changes across multiple files → create separate jobs or do manually
+- Core infrastructure files (main.rs, mod.rs) → too risky
+- Files with complex/nested indentation → whitespace matching often fails
+- When you've already tried edit mode twice → switch approaches
+
+**Edit Mode Failure Recovery:**
+1. Check the job's `_jobstatus.json` for the error message
+2. If "thinking timeout" → the LLM got stuck, try simplifying the instruction
+3. If "Edit mode produced no edits" → the FIND text didn't match
+4. If source file was corrupted → run `git restore <file>` immediately
+5. After 2 failures, switch to replace mode or manual edit
 
 ### 3. Multi-File Replace (Single LLM Call)
 

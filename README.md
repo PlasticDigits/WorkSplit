@@ -722,7 +722,9 @@ worksplit status --json
 - Don't craft verbose prompts (job files are the prompts)
 - Don't watch streaming output (just wait for completion)
 - Don't manually retry (WorkSplit retries once automatically)
-- Don't use edit mode for 10+ similar patterns (it will fail)
+- Don't use edit mode for changes <10 lines (manual edit is faster)
+- Don't use edit mode for multi-file changes (high failure rate)
+- Don't retry edit mode more than twice (switch to replace or manual)
 
 ### Job File Template
 
@@ -757,14 +759,18 @@ fn function_name(args) -> ReturnType
 
 ### Success Rate by Job Type
 
-| Type | Success Rate | Best For |
-|------|--------------|----------|
-| Replace (single file) | ~95% | New files, complete rewrites |
-| Replace (multi-file) | ~90% | Related files, modules |
-| Edit (1-3 locations) | ~90% | Surgical changes |
-| Edit (4-10 locations) | ~70% | Multiple small fixes |
-| Edit (10+ locations) | ~30% | **Avoid - use replace** |
-| Sequential | ~85% | Large features |
+| Type | Success Rate | Best For | Recommendation |
+|------|--------------|----------|----------------|
+| Replace (single file) | ~95% | New files, rewrites | **Preferred** |
+| Replace (multi-file) | ~90% | Related files, modules | **Preferred** |
+| Split | ~90% | Breaking up large files | **Preferred** |
+| Sequential | ~85% | Large multi-file features | **Preferred** |
+| Edit (single location) | ~70% | One surgical change | Use with caution |
+| Edit (2-5 locations) | ~50% | Small fixes | Often fails |
+| Edit (5+ locations) | ~20% | **Avoid entirely** | Use replace mode |
+| Edit (multiple files) | ~30% | **Avoid entirely** | Separate jobs or manual |
+
+**Edit mode guidance**: For changes under 10 lines, manual editing is faster and more reliable than creating a job file. Reserve edit mode for 20-50 line changes in a single file where replace mode would regenerate too much code.
 
 ## Development
 

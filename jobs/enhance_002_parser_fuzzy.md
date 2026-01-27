@@ -1,8 +1,8 @@
 ---
 context_files:
-  - src/core/parser_edit.rs
-output_dir: src/core/
-output_file: parser_edit.rs
+  - src/core/parser/edit.rs
+output_dir: src/core/parser/
+output_file: edit.rs
 ---
 
 # Add Fuzzy Matching with Similarity Scores

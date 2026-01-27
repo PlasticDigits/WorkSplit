@@ -45,6 +45,9 @@ regex = "1"
 # Async streaming
 futures = "0.3"
 
+# Interactive CLI prompts
+dialoguer = "0.11"
+
 [dev-dependencies]
 # Temporary files for testing
 tempfile = "3"
