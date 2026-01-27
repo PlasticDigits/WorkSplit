@@ -394,6 +394,11 @@ If Job B depends on Job A's output:
 
 This section contains guidance specifically for AI assistants using WorkSplit.
 
+### Runtime Expectations
+
+- Typical job runtime is **30–120 seconds per file** depending on model size and context.
+- Plan batching and monitoring accordingly; avoid assuming instant completion.
+
 ### Batching Strategy
 
 **Batch by file, not by task.** If multiple tasks touch the same file:
@@ -470,14 +475,18 @@ worksplit validate
 # 3. Run all jobs at once
 worksplit run
 
-# 4. Check summary only (don't read verbose output)
+# 4. Watch progress for long runs
+worksplit status --watch
+
+# 5. Check summary only (don't read verbose output)
 worksplit status --summary
 
-# 5. Only investigate failures
+# 6. Only investigate failures
 worksplit status --json | jq '.failures[]'
 
-# 6. Resume stuck jobs if needed
-worksplit run --resume
+# 7. Cancel stuck jobs or retry failures
+worksplit cancel my_job_001
+worksplit retry my_job_001
 ```
 
 ### Useful CLI Tools
@@ -485,6 +494,15 @@ worksplit run --resume
 ```bash
 # Preview without executing
 worksplit run --dry-run
+
+# Cancel a running job
+worksplit cancel my_job_001
+
+# Retry a failed job
+worksplit retry my_job_001
+
+# Watch job status in real-time
+worksplit status --watch
 
 # Quiet mode (useful for automation)
 worksplit run -q

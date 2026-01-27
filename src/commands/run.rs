@@ -21,6 +21,8 @@ pub struct RunOptions {
     pub url: Option<String>,
     /// Timeout override
     pub timeout: Option<u64>,
+    /// Per-job timeout in seconds (not yet implemented)
+    pub job_timeout: Option<u64>,
     /// Disable streaming output
     pub no_stream: bool,
     /// Stop processing when any job fails
@@ -41,6 +43,7 @@ impl Default for RunOptions {
             model: None,
             url: None,
             timeout: None,
+            job_timeout: None,
             no_stream: false,
             stop_on_fail: false,
             batch: false,

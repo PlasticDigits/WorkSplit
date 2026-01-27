@@ -1,6 +1,6 @@
 ---
 context_files:
-  - src/core/runner.rs
+  - src/core/runner/mod.rs
   - src/core/parser.rs
 output_dir: src/core/
 output_file: runner.rs

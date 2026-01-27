@@ -78,9 +78,12 @@ Every feature in WorkSplit is designed to reduce what the manager must read, wri
 - **Summary/status JSON**: `worksplit status --summary` or `--json` for quick checks
 - **Dry run**: `worksplit run --dry-run` to preview what would run
 - **Reset command**: `worksplit reset <job_id>` for failed/stuck jobs
+- **Cancel command**: `worksplit cancel <job_id|all>` to stop running jobs
+- **Retry command**: `worksplit retry <job_id>` to retry failed jobs
 - **Dependency-aware ordering**: `depends_on` support and `worksplit deps`
 - **Build verification**: Optional build/test commands via `worksplit.toml`
 - **Batch processing**: Run all jobs with `worksplit run`, check results once at the end
+- **Watch mode**: `worksplit status --watch` for real-time progress monitoring
 
 ## Installation
 
@@ -463,6 +466,63 @@ Validate the jobs folder structure and job files.
 
 ```bash
 worksplit validate
+```
+
+### `worksplit cancel`
+
+Cancel a running job or all running jobs.
+
+```bash
+# Cancel a specific job
+worksplit cancel my_job_001
+
+# Cancel all running jobs
+worksplit cancel all
+```
+
+### `worksplit retry`
+
+Retry a failed job from the beginning.
+
+```bash
+# Retry a specific job
+worksplit retry my_job_001
+```
+
+### `worksplit status`
+
+Show job status summary.
+
+```bash
+worksplit status
+worksplit status -v        # Verbose: show each job
+worksplit status --summary # Single-line summary
+worksplit status --json    # Machine-readable output
+worksplit status --watch   # Watch for changes in real-time
+```
+
+### `worksplit run`
+
+Process pending jobs.
+
+```bash
+# Run all pending jobs
+worksplit run
+
+# Run a specific job
+worksplit run --job my_job_001
+
+# Preview without executing
+worksplit run --dry-run
+
+# Resume stuck jobs
+worksplit run --resume
+
+# Set per-job timeout (seconds)
+worksplit run --job-timeout 300
+
+# Override settings
+worksplit run --model llama3 --timeout 600
 ```
 
 ## Configuration

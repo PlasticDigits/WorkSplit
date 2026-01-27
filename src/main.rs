@@ -9,7 +9,7 @@ mod core;
 mod error;
 mod models;
 
-use commands::{create_new_job, init_project, print_validation_result, run_jobs, show_status, validate_jobs, RunOptions};
+use commands::{cancel_jobs, create_new_job, init_project, print_validation_result, retry_job, run_jobs, show_status, validate_jobs, RunOptions};
 use models::JobTemplate;
 
 /// WorkSplit - Ollama-powered job orchestrator for code generation
@@ -44,6 +44,18 @@ enum Commands {
         status: Option<String>,
     },
 
+    /// Cancel a running job (or all)
+    Cancel {
+        /// Job ID to cancel (or "all")
+        job: String,
+    },
+
+    /// Retry a job (reset + run)
+    Retry {
+        /// Job ID to retry
+        job: String,
+    },
+
     /// Run pending jobs
     Run {
         /// Specific job ID to run
@@ -57,6 +69,10 @@ enum Commands {
         /// Resume stuck jobs (pending_work or pending_verification)
         #[arg(long)]
         resume: bool,
+
+        /// Per-job timeout in seconds
+        #[arg(long)]
+        job_timeout: Option<u64>,
 
         /// Reset a job to created status
         #[arg(long)]
@@ -151,10 +167,21 @@ async fn main() {
             crate::commands::reset::reset_jobs(&project_root, &job, status.as_deref())
         }
 
+        Commands::Cancel { job } => {
+            let project_root = std::env::current_dir().unwrap();
+            cancel_jobs(&project_root, &job)
+        }
+
+        Commands::Retry { job } => {
+            let project_root = std::env::current_dir().unwrap();
+            retry_job(&project_root, &job).await
+        }
+
         Commands::Run {
             job,
             dry_run,
             resume,
+            job_timeout,
             reset,
             model,
             url,
@@ -173,6 +200,7 @@ async fn main() {
                 model,
                 url,
                 timeout,
+                job_timeout,
                 no_stream,
                 stop_on_fail,
                 batch,
