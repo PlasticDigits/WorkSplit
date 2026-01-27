@@ -2,6 +2,8 @@
 
 A Rust CLI tool that delegates code generation to a local Ollama LLM, minimizing the work required from the manager (human or AI) running it. [Latest Release](https://github.com/PlasticDigits/WorkSplit/releases/latest) binaries are available for Linux, MacOS, and Windows.
 
+Currently has templates for Typescript, Rust, and Solidity.
+
 ## The Problem WorkSplit Solves
 
 When using AI assistants for code generation, the **manager** (you, or an AI like Claude/Opus orchestrating the work) pays the cost:
