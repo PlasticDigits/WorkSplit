@@ -1,6 +1,6 @@
 # WorkSplit
 
-A Rust CLI tool that delegates code generation to a local Ollama LLM, minimizing the work required from the manager (human or AI) running it.
+A Rust CLI tool that delegates code generation to a local Ollama LLM, minimizing the work required from the manager (human or AI) running it. [Latest Release](https://github.com/PlasticDigits/WorkSplit/releases/latest) binaries are available for Linux, MacOS, and Windows.
 
 ## The Problem WorkSplit Solves
 
