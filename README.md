@@ -11,6 +11,62 @@ When using AI assistants for code generation, the **manager** (you, or an AI lik
 
 WorkSplit shifts the expensive work to a **free local LLM** (Ollama), so the manager only needs to:
 
+## When to Use WorkSplit (Cost Analysis)
+
+**WorkSplit has overhead**: job creation, validation, verification loops, and potential retries. This overhead is only cost-effective when generating significant amounts of code.
+
+| Lines of Code Changed | Recommended Approach | Why |
+|-----------------------|---------------------|-----|
+| < 50 lines | **Direct edit** (manual or LLM) | WorkSplit overhead exceeds savings |
+| 50-200 lines | **Consider either** | Break-even zone; complexity matters |
+| 200-500 lines | **WorkSplit preferred** | Ollama handles bulk generation free |
+| 500+ lines | **WorkSplit strongly preferred** | Significant cost savings |
+
+### Real-World Cost Comparison
+
+Based on actual usage data:
+
+| Commit | Approach | Lines Changed | Cost | Cost/Line |
+|--------|----------|---------------|------|-----------|
+| Add TypeScript support | Direct LLM | 1,370 lines | $1.47 | $0.0011 |
+| Add model flag to init | WorkSplit | 130 lines | $1.05 | $0.0081 |
+
+**Key insight**: The small task (130 lines) cost **7.5x more per line** with WorkSplit due to:
+- Job file creation and editing
+- Failed edit mode attempt requiring retry
+- Verification loops
+- Manager LLM coordination overhead
+
+### Decision Flowchart for AI Managers
+
+```
+Is the task < 50 lines of changes?
+  └─ Yes → Do it directly (don't use WorkSplit)
+  └─ No ↓
+
+Is it a simple edit (1-2 locations, clear changes)?
+  └─ Yes → Do it directly (faster than job creation)
+  └─ No ↓
+
+Will it generate 200+ lines of new code?
+  └─ Yes → Use WorkSplit (cost savings)
+  └─ No ↓
+
+Is the change complex (multiple files, intricate logic)?
+  └─ Yes → Use WorkSplit (Ollama handles complexity)
+  └─ No → Do it directly
+```
+
+### Break-Even Calculation
+
+WorkSplit overhead ≈ $0.50-1.00 per job (job creation, validation, verification, potential retry)
+
+To break even, the Ollama-generated code must offset this:
+- At ~$0.001/line for direct LLM coding
+- Break-even ≈ **300-500 lines of generated code**
+
+**Rule of thumb**: Use WorkSplit for features, use direct editing for fixes.
+
 1. Write a brief job file (once)
 2. Run `worksplit run`
 3. Check `worksplit status` for pass/fail

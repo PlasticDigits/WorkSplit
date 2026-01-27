@@ -10,6 +10,8 @@ use std::fmt;
 pub enum Language {
     /// Rust programming language
     Rust,
+    /// Solidity smart contracts (Foundry)
+    Solidity,
     /// TypeScript programming language
     Typescript,
 }
@@ -19,6 +21,7 @@ impl Language {
     pub fn display_name(&self) -> &'static str {
         match self {
             Language::Rust => "Rust",
+            Language::Solidity => "Solidity (Foundry)",
             Language::Typescript => "TypeScript",
         }
     }
@@ -27,13 +30,14 @@ impl Language {
     pub fn file_extension(&self) -> &'static str {
         match self {
             Language::Rust => "rs",
+            Language::Solidity => "sol",
             Language::Typescript => "ts",
         }
     }
 
     /// Returns all available languages
     pub fn all() -> &'static [Language] {
-        &[Language::Rust, Language::Typescript]
+        &[Language::Rust, Language::Solidity, Language::Typescript]
     }
 }
 
@@ -56,12 +60,14 @@ mod tests {
     #[test]
     fn test_language_display_name() {
         assert_eq!(Language::Rust.display_name(), "Rust");
+        assert_eq!(Language::Solidity.display_name(), "Solidity (Foundry)");
         assert_eq!(Language::Typescript.display_name(), "TypeScript");
     }
 
     #[test]
     fn test_language_file_extension() {
         assert_eq!(Language::Rust.file_extension(), "rs");
+        assert_eq!(Language::Solidity.file_extension(), "sol");
         assert_eq!(Language::Typescript.file_extension(), "ts");
     }
 
@@ -76,6 +82,10 @@ mod tests {
         let json = serde_json::to_string(&rust).unwrap();
         assert_eq!(json, "\"rust\"");
 
+        let sol = Language::Solidity;
+        let json = serde_json::to_string(&sol).unwrap();
+        assert_eq!(json, "\"solidity\"");
+
         let ts = Language::Typescript;
         let json = serde_json::to_string(&ts).unwrap();
         assert_eq!(json, "\"typescript\"");
@@ -85,6 +95,9 @@ mod tests {
     fn test_language_deserialization() {
         let rust: Language = serde_json::from_str("\"rust\"").unwrap();
         assert_eq!(rust, Language::Rust);
+
+        let sol: Language = serde_json::from_str("\"solidity\"").unwrap();
+        assert_eq!(sol, Language::Solidity);
 
         let ts: Language = serde_json::from_str("\"typescript\"").unwrap();
         assert_eq!(ts, Language::Typescript);

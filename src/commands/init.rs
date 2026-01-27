@@ -54,6 +54,21 @@ pub fn init_project(project_root: &PathBuf, lang: Option<Language>, model: Optio
     )?;
 
     create_file_if_not_exists(
+        &jobs_dir.join("_systemprompt_edit.md"),
+        templates.edit_prompt,
+    )?;
+
+    create_file_if_not_exists(
+        &jobs_dir.join("_systemprompt_verify_edit.md"),
+        templates.verify_edit_prompt,
+    )?;
+
+    create_file_if_not_exists(
+        &jobs_dir.join("_systemprompt_split.md"),
+        templates.split_prompt,
+    )?;
+
+    create_file_if_not_exists(
         &jobs_dir.join("_systemprompt_test.md"),
         templates.test_prompt,
     )?;
@@ -201,11 +216,15 @@ fn print_next_steps(project_root: &PathBuf, language: Language, model: &str) {
     println!("\nLanguage: {}", language.display_name());
     println!("\nModel: {}", model);
     println!("\nNext steps:");
-    println!("1. Edit jobs/_systemprompt_create.md to customize code generation instructions");
-    println!("2. Edit jobs/_systemprompt_verify.md to customize verification instructions");
-    println!("3. Edit jobs/_systemprompt_test.md to customize test generation (for TDD workflow)");
-    println!("4. Create job files in the jobs/ directory");
-    println!("5. Run 'worksplit run' to process jobs");
+    println!("1. Review jobs/_managerinstruction.md for guidance on creating job files");
+    println!("2. Create job files in the jobs/ directory");
+    println!("3. Run 'worksplit run' to process jobs");
+    println!("\nSystem prompts created:");
+    println!("  - _systemprompt_create.md  (code generation)");
+    println!("  - _systemprompt_verify.md  (code verification)");
+    println!("  - _systemprompt_edit.md    (edit mode)");
+    println!("  - _systemprompt_split.md   (split mode)");
+    println!("  - _systemprompt_test.md    (TDD test generation)");
     println!("\nTip: Add 'test_file: <filename>' to job frontmatter to enable TDD workflow");
     
     match language {
@@ -214,6 +233,14 @@ fn print_next_steps(project_root: &PathBuf, language: Language, model: &str) {
             println!("- Use .rs extension for output files");
             println!("- Build command: cargo check");
             println!("- Test command: cargo test");
+        }
+        Language::Solidity => {
+            println!("\nSolidity/Foundry-specific tips:");
+            println!("- Use .sol extension for output files");
+            println!("- Place contracts in src/");
+            println!("- Place tests in test/ with .t.sol extension");
+            println!("- Build command: forge build");
+            println!("- Test command: forge test");
         }
         Language::Typescript => {
             println!("\nTypeScript-specific tips:");

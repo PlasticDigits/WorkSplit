@@ -1,0 +1,24 @@
+# WorkSplit Configuration
+
+[project]
+language = "typescript"
+
+[ollama]
+url = "http://localhost:11434"
+model = "qwen-32k:latest"
+timeout_seconds = 300
+
+[limits]
+max_output_lines = 900
+max_context_lines = 1000
+max_context_files = 2
+
+[behavior]
+stream_output = true
+create_output_dirs = true
+
+[build]
+build_command = "npm run build"
+test_command = "npm test"
+verify_build = false
+verify_tests = false

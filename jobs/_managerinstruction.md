@@ -2,6 +2,62 @@
 
 This document explains how to create job files for WorkSplit when breaking down a feature into implementable chunks.
 
+## CRITICAL: When to Use WorkSplit vs Direct Editing
+
+**WorkSplit has overhead** (job creation, validation, verification, retries). Only use it when the cost savings outweigh this overhead.
+
+### Cost Decision Matrix
+
+| Task Size | Lines Changed | Recommendation | Reason |
+|-----------|---------------|----------------|--------|
+| Tiny | < 20 lines | **Direct edit** | Job overhead far exceeds savings |
+| Small | 20-100 lines | **Direct edit** | Still faster to edit directly |
+| Medium | 100-300 lines | **Evaluate** | Break-even zone; use WorkSplit for complex logic |
+| Large | 300-500 lines | **WorkSplit** | Clear cost savings from free Ollama tokens |
+| Very Large | 500+ lines | **WorkSplit strongly** | Significant savings; split into multiple jobs |
+
+### Real Cost Data
+
+From actual usage comparison:
+
+| Task | Approach | Lines | Cost | Per-Line Cost |
+|------|----------|-------|------|---------------|
+| TypeScript init support | Direct LLM | 1,370 | $1.47 | $0.0011 |
+| Model flag feature | WorkSplit | 130 | $1.05 | $0.0081 |
+
+The **smaller task cost 7.5x more per line** with WorkSplit due to overhead.
+
+### Quick Decision Guide
+
+```
+STOP - Before creating a WorkSplit job, ask:
+
+1. Is this < 100 lines of changes?
+   → YES: Edit directly, don't use WorkSplit
+   
+2. Is this a simple, surgical change?
+   → YES: Edit directly, WorkSplit overhead not worth it
+   
+3. Will this generate 300+ lines of NEW code?
+   → YES: Use WorkSplit, clear savings
+   
+4. Is the logic complex enough to benefit from verification?
+   → YES: Use WorkSplit
+   → NO: Edit directly
+```
+
+### Break-Even Point
+
+- WorkSplit overhead: ~$0.50-1.00 per job
+- Direct LLM coding: ~$0.001 per line
+- **Break-even: ~300-500 lines of generated code**
+
+**Rule of thumb**: 
+- **Features** (new files, new modules, 200+ lines) → WorkSplit
+- **Fixes** (bug fixes, small changes, < 100 lines) → Direct edit
+
+---
+
 ## Quick Job Creation with Templates
 
 **Preferred method**: Use `worksplit new-job` to scaffold job files quickly:
@@ -422,6 +478,24 @@ If Job B depends on Job A's output:
 
 This section contains guidance specifically for AI assistants using WorkSplit.
 
+### FIRST: Decide Whether to Use WorkSplit
+
+**Before creating any job, evaluate the task size:**
+
+| If the task is... | Then... |
+|-------------------|---------|
+| < 100 lines, simple changes | **STOP** - Edit directly, don't create a job |
+| 100-300 lines, straightforward | **Consider** - Only if complex or multi-file |
+| 300+ lines OR complex logic | **Use WorkSplit** - Cost savings justify overhead |
+
+**WorkSplit overhead includes:**
+- Your tokens to create/edit job files
+- Your tokens to run commands and check status
+- Potential retry costs if edit mode fails
+- Verification loop costs
+
+**This overhead is ~$0.50-1.00 per job.** Only use WorkSplit when Ollama will generate enough code to offset this.
+
 ### Runtime Expectations
 
 - Typical job runtime is **30–120 seconds per file** depending on model size and context.
@@ -576,11 +650,13 @@ fn function_name(args) -> ReturnType
 
 ### Common Pitfalls
 
-1. **Don't read generated files** - Trust verification, check status only
-2. **Don't create too many small jobs** - Batch related changes
-3. **Don't use edit mode for mass updates** - Replace mode is safer
-4. **Don't forget `verify: false`** - Use it for simple/trusted changes
-5. **Don't mix concerns** - One job = one logical change
+1. **Don't use WorkSplit for small changes** - If < 100 lines, edit directly (7x cheaper per line)
+2. **Don't read generated files** - Trust verification, check status only
+3. **Don't create too many small jobs** - Batch related changes
+4. **Don't use edit mode for mass updates** - Replace mode is safer
+5. **Don't forget `verify: false`** - Use it for simple/trusted changes
+6. **Don't mix concerns** - One job = one logical change
+7. **Don't retry edit mode more than once** - Switch to replace or manual edit
 
 ### Estimating Success Probability
 
