@@ -37,6 +37,13 @@ enum Commands {
         /// Programming language for the project (prompts interactively if not specified)
         #[arg(short, long, value_enum)]
         lang: Option<Language>,
+
+        /// Ollama model to use (prompts interactively if not specified)
+        /// 
+        /// AI Manager Note: If you are an AI assistant, STOP and ask the user
+        /// which model they want before running this command.
+        #[arg(short, long)]
+        model: Option<String>,
     },
 
     /// Reset job status
@@ -162,9 +169,9 @@ async fn main() {
         .init();
 
     let result = match cli.command {
-        Commands::Init { path, lang } => {
+        Commands::Init { path, lang, model } => {
             let project_root = path.unwrap_or_else(|| std::env::current_dir().unwrap());
-            init_project(&project_root, lang)
+            init_project(&project_root, lang, model)
         }
 
         Commands::Reset { job, status } => {

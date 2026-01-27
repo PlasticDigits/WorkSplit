@@ -166,6 +166,19 @@
     "error": "Context file too large: src/core/parser.rs has 1622 lines (max: 1000)"
   },
   {
+    "id": "init_001_model_selection",
+    "status": "fail",
+    "created_at": "2026-01-27T07:03:48.453786588Z",
+    "updated_at": "2026-01-27T07:09:32.528504328Z",
+    "error": "No edits were applied"
+  },
+  {
+    "id": "init_002_cli_model_flag",
+    "status": "created",
+    "created_at": "2026-01-27T07:03:48.453795885Z",
+    "updated_at": "2026-01-27T07:03:48.453795885Z"
+  },
+  {
     "id": "plan3_001_build_foundation",
     "status": "pass",
     "created_at": "2026-01-27T02:48:34.826246589Z",
