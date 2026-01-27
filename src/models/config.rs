@@ -10,6 +10,8 @@ pub struct Config {
     pub limits: LimitsConfig,
     #[serde(default)]
     pub behavior: BehaviorConfig,
+    #[serde(default)]
+    pub build: BuildConfig,
 }
 
 impl Default for Config {
@@ -18,6 +20,7 @@ impl Default for Config {
             ollama: OllamaConfig::default(),
             limits: LimitsConfig::default(),
             behavior: BehaviorConfig::default(),
+            build: BuildConfig::default(),
         }
     }
 }
@@ -120,6 +123,40 @@ fn default_stream_output() -> bool {
 
 fn default_create_output_dirs() -> bool {
     true
+}
+
+/// Build and test verification configuration
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct BuildConfig {
+    /// Command to verify code compiles (optional)
+    pub build_command: Option<String>,
+    /// Command to run tests (optional)
+    pub test_command: Option<String>,
+    /// Whether to run build verification after generation
+    #[serde(default = "default_verify_build")]
+    pub verify_build: bool,
+    /// Whether to run tests after generation
+    #[serde(default = "default_verify_tests")]
+    pub verify_tests: bool,
+}
+
+impl Default for BuildConfig {
+    fn default() -> Self {
+        Self {
+            build_command: None,
+            test_command: None,
+            verify_build: default_verify_build(),
+            verify_tests: default_verify_tests(),
+        }
+    }
+}
+
+fn default_verify_build() -> bool {
+    false
+}
+
+fn default_verify_tests() -> bool {
+    false
 }
 
 impl Config {

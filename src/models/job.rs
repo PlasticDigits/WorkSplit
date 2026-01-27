@@ -37,6 +37,9 @@ pub struct JobMetadata {
     /// Context files to include (max 2, each < 1000 LOC)
     #[serde(default)]
     pub context_files: Vec<PathBuf>,
+    /// Optional list of job IDs this job depends on
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub depends_on: Option<Vec<String>>,
     /// Output directory relative to project root
     pub output_dir: PathBuf,
     /// Output filename (used when output_files is not specified)
@@ -325,6 +328,7 @@ mod tests {
             verify: true,
             struct_name: None,
             new_field: None,
+            depends_on: None,
         };
         assert!(metadata.validate(2).is_ok());
         assert!(metadata.validate(1).is_err());
@@ -345,6 +349,7 @@ mod tests {
             verify: true,
             struct_name: None,
             new_field: None,
+            depends_on: None,
         };
         assert!(matches!(
             metadata.validate(2),
@@ -367,6 +372,7 @@ mod tests {
             verify: true,
             struct_name: None,
             new_field: None,
+            depends_on: None,
         };
         assert_eq!(
             metadata.output_path(),
@@ -389,6 +395,7 @@ mod tests {
             verify: true,
             struct_name: None,
             new_field: None,
+            depends_on: None,
         };
         assert!(metadata_with_test.is_tdd_enabled());
 
@@ -405,6 +412,7 @@ mod tests {
             verify: true,
             struct_name: None,
             new_field: None,
+            depends_on: None,
         };
         assert!(!metadata_without_test.is_tdd_enabled());
     }
@@ -424,6 +432,7 @@ mod tests {
             verify: true,
             struct_name: None,
             new_field: None,
+            depends_on: None,
         };
         assert_eq!(
             metadata_with_test.test_path(),
@@ -443,6 +452,7 @@ mod tests {
             verify: true,
             struct_name: None,
             new_field: None,
+            depends_on: None,
         };
         assert_eq!(metadata_without_test.test_path(), None);
     }
@@ -462,6 +472,7 @@ mod tests {
             verify: true,
             struct_name: None,
             new_field: None,
+            depends_on: None,
         };
         assert!(matches!(
             metadata.validate(2),
@@ -562,6 +573,7 @@ sequential: true
             verify: true,
             struct_name: None,
             new_field: None,
+            depends_on: None,
         };
         let output_files = metadata.get_output_files();
         assert_eq!(output_files.len(), 1);
@@ -583,6 +595,7 @@ sequential: true
             verify: true,
             struct_name: None,
             new_field: None,
+            depends_on: None,
         };
         assert!(matches!(
             metadata.validate(2),
@@ -605,6 +618,7 @@ sequential: true
             verify: true,
             struct_name: None,
             new_field: None,
+            depends_on: None,
         };
         assert!(matches!(
             metadata.validate(2),
@@ -627,6 +641,7 @@ sequential: true
             verify: true,
             struct_name: None,
             new_field: None,
+            depends_on: None,
         };
         assert!(!metadata_replace.is_edit_mode());
 
@@ -643,6 +658,7 @@ sequential: true
             verify: true,
             struct_name: None,
             new_field: None,
+            depends_on: None,
         };
         assert!(metadata_edit.is_edit_mode());
     }
@@ -665,6 +681,7 @@ sequential: true
             verify: true,
             struct_name: None,
             new_field: None,
+            depends_on: None,
         };
         let target_files = metadata_with_targets.get_target_files();
         assert_eq!(target_files.len(), 2);
@@ -684,6 +701,7 @@ sequential: true
             verify: true,
             struct_name: None,
             new_field: None,
+            depends_on: None,
         };
         let target_files = metadata_without_targets.get_target_files();
         assert_eq!(target_files.len(), 1);
@@ -705,6 +723,7 @@ sequential: true
             verify: true,
             struct_name: None,
             new_field: None,
+            depends_on: None,
         };
         assert!(matches!(
             metadata.validate(2),
@@ -727,6 +746,7 @@ sequential: true
             verify: true,
             struct_name: None,
             new_field: None,
+            depends_on: None,
         };
         assert!(matches!(
             metadata.validate(2),
@@ -749,6 +769,7 @@ sequential: true
             verify: true,
             struct_name: None,
             new_field: None,
+            depends_on: None,
         };
         assert!(matches!(
             metadata.validate(2),
@@ -815,6 +836,7 @@ output_file: service.rs
             verify: true,
             struct_name: None,
             new_field: None,
+            depends_on: None,
         };
         assert!(metadata_split.is_split_mode());
         assert!(!metadata_split.is_edit_mode());
@@ -836,6 +858,7 @@ output_file: service.rs
             verify: true,
             struct_name: None,
             new_field: None,
+            depends_on: None,
         };
         assert!(valid_metadata.validate(2).is_ok());
     }
@@ -855,6 +878,7 @@ output_file: service.rs
             verify: true,
             struct_name: None,
             new_field: None,
+            depends_on: None,
         };
         assert!(matches!(
             metadata.validate(2),
@@ -877,6 +901,7 @@ output_file: service.rs
             verify: true,
             struct_name: None,
             new_field: None,
+            depends_on: None,
         };
         assert!(matches!(
             metadata.validate(2),
@@ -899,6 +924,7 @@ output_file: service.rs
             verify: true,
             struct_name: None,
             new_field: None,
+            depends_on: None,
         };
         assert!(matches!(
             metadata.validate(2),

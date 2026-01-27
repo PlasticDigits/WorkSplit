@@ -1,6 +1,7 @@
 pub mod init;
 pub mod new_job;
 pub mod run;
+pub mod reset;
 pub mod status;
 pub mod validate;
 

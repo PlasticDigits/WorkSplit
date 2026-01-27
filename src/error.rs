@@ -44,6 +44,23 @@ pub enum WorkSplitError {
     #[error("Ollama error: {0}")]
     Ollama(#[from] OllamaError),
 
+    #[error("Build failed for {command}:\n{output}")]
+    BuildFailed {
+        command: String,
+        output: String,
+    },
+
+    #[error("File too large: {path} has {lines} lines (max: {limit})\n\nManager action required:\n{suggestion}")]
+    FileTooLarge {
+        path: PathBuf,
+        lines: usize,
+        limit: usize,
+        suggestion: String,
+    },
+
+    #[error("Cyclic dependency detected in job files. Check depends_on for cycles.")]
+    CyclicDependency,
+
     #[error("IO error: {0}")]
     Io(#[from] std::io::Error),
 

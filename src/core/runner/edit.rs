@@ -2,7 +2,7 @@ use std::fs;
 use std::path::{Path, PathBuf};
 
 use crate::core::{
-    assemble_edit_prompt, parse_edit_instructions, apply_edits, apply_edit, find_fuzzy_match,
+    assemble_edit_prompt, parse_edit_instructions, apply_edit, find_fuzzy_match,
     OllamaClient, EditInstruction, SYSTEM_PROMPT_EDIT,
 };
 use crate::error::WorkSplitError;
@@ -73,7 +73,6 @@ pub(crate) async fn dry_run_edit_mode(
         let content = fs::read_to_string(&file_path)
             .unwrap_or_else(|_| String::new());
         
-        let status = PlannedEditStatus::WillFail;
         let line_number = None;
         
         // Try exact match
@@ -158,7 +157,7 @@ pub(crate) async fn process_edit_mode(
     job: &Job,
     context_files: &[(PathBuf, String)],
     edit_prompt: &str,
-    dry_run: bool,
+    _dry_run: bool,
 ) -> Result<EditModeResult, WorkSplitError> {
     let target_files = job.metadata.get_target_files();
     let mut target_file_contents: Vec<(PathBuf, String)> = Vec::new();

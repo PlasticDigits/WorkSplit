@@ -75,6 +75,11 @@ Every feature in WorkSplit is designed to reduce what the manager must read, wri
 - **Built-in verification**: Ollama validates its own output before marking complete
 - **Automatic retry**: One retry attempt on verification failure (no manager intervention)
 - **Concise status**: `worksplit status` shows one line per job
+- **Summary/status JSON**: `worksplit status --summary` or `--json` for quick checks
+- **Dry run**: `worksplit run --dry-run` to preview what would run
+- **Reset command**: `worksplit reset <job_id>` for failed/stuck jobs
+- **Dependency-aware ordering**: `depends_on` support and `worksplit deps`
+- **Build verification**: Optional build/test commands via `worksplit.toml`
 - **Batch processing**: Run all jobs with `worksplit run`, check results once at the end
 
 ## Installation
@@ -410,10 +415,13 @@ worksplit run
 # Run a specific job
 worksplit run --job my_job_001
 
+# Preview without executing
+worksplit run --dry-run
+
 # Resume stuck jobs
 worksplit run --resume
 
-# Reset a job to created status
+# Reset a job to created status (legacy)
 worksplit run --reset my_job_001
 
 # Override settings
@@ -426,7 +434,27 @@ Show job status summary.
 
 ```bash
 worksplit status
-worksplit status -v  # Verbose: show each job
+worksplit status -v        # Verbose: show each job
+worksplit status --summary # Single-line summary
+worksplit status --json    # Machine-readable output
+```
+
+### `worksplit reset`
+
+Reset a job (or all failed jobs) to created status.
+
+```bash
+worksplit reset my_job_001
+worksplit reset all
+worksplit reset all --status partial
+```
+
+### `worksplit deps`
+
+Show dependency ordering for jobs that specify `depends_on`.
+
+```bash
+worksplit deps
 ```
 
 ### `worksplit validate`
@@ -451,6 +479,12 @@ timeout_seconds = 300
 max_output_lines = 900
 max_context_lines = 1000
 max_context_files = 2
+
+[build]
+# build_command = "cargo check"
+# test_command = "cargo test"
+# verify_build = true
+# verify_tests = false
 
 [behavior]
 stream_output = true
@@ -509,6 +543,9 @@ Make it work with the user model.
 3. **Reference context files**: Tell Ollama exactly which types to use
 4. **Specify error handling**: "Use Result<T, E>" not "handle errors gracefully"
 5. **One concern per job**: Split complex features into multiple jobs
+6. **Avoid edit drift**: Prefer replace mode when FIND/REPLACE may change
+
+If a context or target file exceeds 900 LOC, WorkSplit will fail with split-job instructions.
 
 ### Naming Convention
 
@@ -531,7 +568,7 @@ If a job fails, you have two options:
 ```bash
 worksplit status -v              # See the error
 # Edit the job file to fix the issue
-worksplit run --reset job_id     # Reset and retry
+worksplit reset job_id           # Reset and retry
 ```
 
 **Option 2: Accept and move on** (for non-critical failures)
@@ -544,6 +581,10 @@ worksplit run --reset job_id     # Reset and retry
 # Quick check: just counts
 worksplit status
 # Output: 5 passed, 1 failed, 2 pending
+
+# Summary or JSON for automation
+worksplit status --summary
+worksplit status --json
 
 # Only if needed: see which failed
 worksplit status -v
@@ -587,6 +628,7 @@ Small change (<50 lines)?    → Edit mode
 Many similar patterns (>10)? → Replace mode (edit will fail)
 Changing >50% of file?       → Replace mode
 Adding struct field?         → See "Struct Field Pattern" below
+Find/replace drift risk?     → Replace mode
 ```
 
 ### Struct Field Addition Pattern

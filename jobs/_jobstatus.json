@@ -168,6 +168,66 @@
     "error": "The generated code introduces a new `VerificationResult` enum and updates `parse_verification` to return `(VerificationResult, Option<String>)`, but there are several issues:"
   },
   {
+    "id": "plan3_001_build_foundation",
+    "status": "pass",
+    "created_at": "2026-01-27T02:48:34.826246589Z",
+    "updated_at": "2026-01-27T02:49:30.764769347Z"
+  },
+  {
+    "id": "plan3_002_build_logic",
+    "status": "pass",
+    "created_at": "2026-01-27T02:48:34.826252740Z",
+    "updated_at": "2026-01-27T03:13:52.266443349Z"
+  },
+  {
+    "id": "plan3_003_large_file_detection",
+    "status": "pass",
+    "created_at": "2026-01-27T02:48:34.826258481Z",
+    "updated_at": "2026-01-27T03:14:44.261257950Z"
+  },
+  {
+    "id": "plan3_004_reset_command_impl",
+    "status": "pass",
+    "created_at": "2026-01-27T02:48:34.826264212Z",
+    "updated_at": "2026-01-27T03:06:02.306801599Z"
+  },
+  {
+    "id": "plan3_005_reset_command_wire",
+    "status": "pass",
+    "created_at": "2026-01-27T02:48:34.826269402Z",
+    "updated_at": "2026-01-27T02:59:22.831821367Z"
+  },
+  {
+    "id": "plan3_006_dry_run",
+    "status": "pass",
+    "created_at": "2026-01-27T02:48:34.826274611Z",
+    "updated_at": "2026-01-27T03:15:34.968992168Z"
+  },
+  {
+    "id": "plan3_007_dependency_metadata",
+    "status": "pass",
+    "created_at": "2026-01-27T02:48:34.826280302Z",
+    "updated_at": "2026-01-27T03:16:22.331968833Z"
+  },
+  {
+    "id": "plan3_008_dependency_impl",
+    "status": "pass",
+    "created_at": "2026-01-27T02:48:34.826285522Z",
+    "updated_at": "2026-01-27T03:16:56.614080743Z"
+  },
+  {
+    "id": "plan3_009_dependency_wire",
+    "status": "pass",
+    "created_at": "2026-01-27T02:48:34.826291163Z",
+    "updated_at": "2026-01-27T03:19:21.909034390Z"
+  },
+  {
+    "id": "plan3_010_dead_code",
+    "status": "pass",
+    "created_at": "2026-01-27T02:48:34.826296312Z",
+    "updated_at": "2026-01-27T03:21:49.764398629Z"
+  },
+  {
     "id": "split_001_runner",
     "status": "pass",
     "created_at": "2026-01-25T11:51:27.517065447Z",

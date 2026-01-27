@@ -43,9 +43,11 @@ When a job fails and you've fixed the issue, reset it to run again:
 # View failed jobs
 worksplit status -v | grep FAIL
 
-# Reset a specific job (edit _jobstatus.json)
-# Change "status": "fail" to "status": "created"
-# Remove the "error": "..." line
+# Reset a specific job
+worksplit reset my_job_001
+
+# Reset all failed jobs
+worksplit reset all
 
 # Then run again
 worksplit run
@@ -182,6 +184,7 @@ Edit mode is sensitive to exact text matching. To ensure successful edits:
 - Creating new files (use replace mode)
 - Large refactors (use replace or sequential)
 - Changes spanning >50% of a file
+- Find/replace drift risk (prefer replace mode)
 
 ### 3. Multi-File Replace (Single LLM Call)
 
@@ -321,6 +324,19 @@ sequential: true
 | Sequential | Medium | High | Good (redo one) |
 | Edit | Medium | Very High | Good (re-edit) |
 
+## Preventing Dead Code (Implementation + Integration Pattern)
+
+When adding new functionality, try to follow this pattern to ensure new code is actually used:
+
+1. **Implementation job**: Creates the new types/functions.
+2. **Integration job**: Updates existing callers to use the new code.
+
+Example:
+- `auth_001_service.md`: Implements `AuthService`.
+- `auth_002_integration.md`: Updates `main.rs` to initialize and call `AuthService`.
+
+Use `mode: edit` for integration jobs to surgically wire up the new code.
+
 ## Best Practices
 
 ### 1. Size Jobs Appropriately
@@ -329,6 +345,10 @@ Each job should generate **at most 900 lines of code**. If a feature requires mo
 - Split into multiple jobs
 - Each job handles one concern (model, service, API, etc.)
 - Order jobs by dependency (use alphabetical naming)
+ 
+WorkSplit will now fail fast if any context/target file exceeds 900 LOC. Create a split job first.
+
+If `worksplit.toml` includes a `[build]` section, expect build/test verification after generation.
 
 ### 2. Choose Context Files Wisely
 
@@ -455,6 +475,26 @@ worksplit status --summary
 
 # 5. Only investigate failures
 worksplit status --json | jq '.failures[]'
+
+# 6. Resume stuck jobs if needed
+worksplit run --resume
+```
+
+### Useful CLI Tools
+
+```bash
+# Preview without executing
+worksplit run --dry-run
+
+# Quiet mode (useful for automation)
+worksplit run -q
+
+# Dependency ordering for depends_on
+worksplit deps
+
+# Summary/JSON for automation
+worksplit status --summary
+worksplit status --json
 ```
 
 ### Job File Template for AI Managers

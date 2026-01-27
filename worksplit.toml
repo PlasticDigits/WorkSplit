@@ -11,6 +11,12 @@ max_output_lines = 900
 max_context_lines = 1000
 max_context_files = 2
 
+[build]
+# build_command = "cargo check"
+# test_command = "cargo test"
+# verify_build = true
+# verify_tests = false
+
 [behavior]
 stream_output = true
 create_output_dirs = true

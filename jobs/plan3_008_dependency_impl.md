@@ -1,3 +1,20 @@
+---
+mode: replace
+output_dir: src/core/
+output_file: dependency.rs
+---
+
+# Plan3 Task 4: Dependency Resolution Implementation
+
+Implement topological sorting for jobs based on `depends_on`.
+
+## Requirements
+
+1. Create `src/core/dependency.rs`.
+2. Implement `order_by_dependencies` using Kahn's algorithm or similar.
+3. Handle cyclic dependencies.
+
+~~~worksplit:src/core/dependency.rs
 use std::collections::{HashMap, VecDeque};
 use crate::models::job::Job;
 use crate::error::WorkSplitError;
@@ -47,3 +64,4 @@ pub fn order_by_dependencies(jobs: &[Job]) -> Result<Vec<&Job>, WorkSplitError> 
     
     Ok(result)
 }
+~~~worksplit

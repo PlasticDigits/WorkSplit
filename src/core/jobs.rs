@@ -248,6 +248,54 @@ impl JobsManager {
         self.cache.clear();
     }
 
+    /// Check if any file exceeds LOC limit and return actionable error
+    pub fn check_file_sizes(&mut self, job: &Job) -> Result<(), WorkSplitError> {
+        let limit = 900;
+        
+        // Check context files
+        for path in &job.metadata.context_files {
+            let full_path = self.project_root.join(path);
+            if !full_path.exists() { continue; }
+            let entry = self.cache.get_or_load(&full_path).map_err(WorkSplitError::Io)?;
+            if entry.line_count > limit {
+                return Err(WorkSplitError::FileTooLarge {
+                    path: path.clone(),
+                    lines: entry.line_count,
+                    limit,
+                    suggestion: format!(
+                        "Manager must create and run a split job first:\n\
+                         worksplit new-job split_{} --template split --targets {}\n\
+                         Then update this job to reference the smaller modules.",
+                        path.file_stem().unwrap_or_default().to_string_lossy(),
+                        path.display()
+                    ),
+                });
+            }
+        }
+        
+        // Check target files (for edit mode)
+        for path in job.metadata.get_target_files() {
+            let full_path = self.project_root.join(&path);
+            if !full_path.exists() { continue; }
+            let entry = self.cache.get_or_load(&full_path).map_err(WorkSplitError::Io)?;
+            if entry.line_count > limit {
+                return Err(WorkSplitError::FileTooLarge {
+                    path: path.clone(),
+                    lines: entry.line_count,
+                    limit,
+                    suggestion: format!(
+                        "File too large for edit mode. Split it first:\n\
+                         worksplit new-job split_{} --template split --targets {}",
+                        path.file_stem().unwrap_or_default().to_string_lossy(),
+                        path.display()
+                    ),
+                });
+            }
+        }
+        
+        Ok(())
+    }
+
     /// Invalidate a specific file from cache
     pub fn invalidate_cache(&mut self, path: &Path) {
         self.cache.invalidate(path);

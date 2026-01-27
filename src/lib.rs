@@ -1,3 +1,4 @@
+#![allow(dead_code)]
 //! WorkSplit - Ollama-powered job orchestrator for code generation
 //!
 //! WorkSplit is a CLI tool that processes job files through a local Ollama LLM instance.

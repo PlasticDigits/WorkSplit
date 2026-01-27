@@ -2,22 +2,17 @@
 
 use std::fs;
 use std::path::{Path, PathBuf};
+use std::process::Command;
 use std::sync::Arc;
-use tokio::sync::Mutex;
-use futures::future::join_all;
 use tracing::{error, info, warn};
 
 use crate::core::{
-    assemble_creation_prompt, assemble_sequential_creation_prompt, assemble_test_prompt, 
-    assemble_verification_prompt_multi, assemble_retry_prompt_multi, assemble_edit_prompt,
-    assemble_sequential_split_prompt,
-    count_lines, extract_code, extract_code_files, parse_verification, parse_edit_instructions, 
-    apply_edits, JobsManager, OllamaClient, StatusManager, EditInstruction,
-    DependencyGraph,
+    assemble_creation_prompt, assemble_test_prompt, assemble_sequential_split_prompt,
+    count_lines, extract_code, extract_code_files, JobsManager, OllamaClient, StatusManager,
     SYSTEM_PROMPT_CREATE, SYSTEM_PROMPT_TEST,
 };
 use crate::error::WorkSplitError;
-use crate::models::{Config, JobStatus};
+use crate::models::{Config, JobStatus, Job};
 
 mod edit;
 mod sequential;
@@ -203,17 +198,25 @@ impl Runner {
             return Ok(RunSummary::default());
         }
 
-        // Build dependency graph
-        let jobs_metadata: Vec<(String, crate::models::JobMetadata)> = jobs_to_run
-            .iter()
-            .filter_map(|id| {
-                self.jobs_manager.parse_job(id).ok()
-                    .map(|job| (id.clone(), job.metadata))
-            })
-            .collect();
+        let mut sorted_jobs = Vec::new();
+        for id in &jobs_to_run {
+            if let Ok(job) = self.jobs_manager.parse_job(id) {
+                sorted_jobs.push(job);
+            }
+        }
+        let ordered = crate::core::dependency::order_by_dependencies(&sorted_jobs)?
+            .into_iter()
+            .map(|job| job.id.clone())
+            .collect::<Vec<_>>();
 
-        let graph = crate::core::DependencyGraph::build(&jobs_metadata);
-        let groups = graph.execution_groups(&jobs_to_run);
+        let mut groups = Vec::new();
+        if max_concurrent > 0 {
+            for chunk in ordered.chunks(max_concurrent) {
+                groups.push(chunk.to_vec());
+            }
+        } else {
+            groups.push(ordered);
+        }
 
         info!("Processing {} jobs in {} parallel groups", jobs_to_run.len(), groups.len());
 
@@ -238,7 +241,7 @@ impl Runner {
         // Process each group
         for (group_idx, group) in groups.iter().enumerate() {
             if stopped_early {
-                summary.skipped += group.len();
+                summary.skipped += group.len() as usize;
                 continue;
             }
 
@@ -309,7 +312,7 @@ impl Runner {
         }
 
         if stopped_early {
-            let total: usize = groups.iter().map(|g| g.len()).sum();
+            let total: usize = groups.iter().map(|g| g.len()).sum::<usize>();
             summary.skipped = total - summary.processed;
         }
 
@@ -332,6 +335,43 @@ impl Runner {
 
         self.run_job(job_id, &create_prompt, &verify_prompt, test_prompt.as_deref(),
                     &edit_prompt, &verify_edit_prompt, split_prompt.as_deref()).await
+    }
+
+    async fn verify_with_build(&self, _job: &Job, files: &[(PathBuf, String)]) -> Result<(), WorkSplitError> {
+        if !self.config.build.verify_build {
+            return Ok(());
+        }
+
+        let Some(ref cmd) = self.config.build.build_command else {
+            return Ok(());
+        };
+
+        info!("Running build verification command: {}", cmd);
+
+        let output = Command::new("sh")
+            .arg("-c")
+            .arg(cmd)
+            .current_dir(&self.project_root)
+            .output()?;
+
+        if !output.status.success() {
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            let stdout = String::from_utf8_lossy(&output.stdout);
+
+            let error_context = format!(
+                "Build failed after generating files:\n\nFiles generated:\n{}\n\nBuild output:\n{}\n{}",
+                files.iter().map(|(p, _)| p.display().to_string()).collect::<Vec<_>>().join("\n"),
+                stdout,
+                stderr
+            );
+
+            return Err(WorkSplitError::BuildFailed {
+                command: cmd.clone(),
+                output: error_context,
+            });
+        }
+
+        Ok(())
     }
 
     async fn run_job(&mut self, job_id: &str, create_prompt: &str, verify_prompt: &str,
@@ -475,6 +515,8 @@ impl Runner {
             }
         }
 
+        self.verify_with_build(&job, &generated_files).await?;
+
         self.status_manager.update_status(job_id, JobStatus::PendingVerification)?;
 
         let effective_verify = if job.metadata.is_edit_mode() { verify_edit_prompt } else { verify_prompt };
@@ -531,6 +573,10 @@ impl Runner {
             self.status_manager.set_failed(job_id, msg.clone())?;
         } else {
             self.status_manager.update_status(job_id, final_status)?;
+        }
+
+        if final_status == JobStatus::Pass {
+            info!("Generation complete. REMINDER: Ensure new code is wired into callers.");
         }
 
         info!("Job '{}' completed with status: {:?}", job_id, final_status);

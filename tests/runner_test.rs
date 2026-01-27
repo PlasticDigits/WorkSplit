@@ -117,7 +117,7 @@ fn test_status_transitions() {
 
 #[test]
 fn test_status_persistence() {
-    let (temp_dir, project_root) = create_test_project();
+    let (_temp_dir, project_root) = create_test_project();
 
     create_test_job(&project_root, "persistent_job", "src/", "p.rs", "Instructions");
 

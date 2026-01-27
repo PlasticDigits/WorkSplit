@@ -1,3 +1,4 @@
+#![allow(dead_code)]
 use clap::{Parser, Subcommand};
 use std::path::PathBuf;
 use tracing::Level;
@@ -33,11 +34,25 @@ enum Commands {
         path: Option<PathBuf>,
     },
 
+    /// Reset job status
+    Reset {
+        /// Job ID to reset (or "all" for all failed jobs)
+        job: String,
+
+        /// Reset all jobs matching status (e.g., "fail", "partial")
+        #[arg(long)]
+        status: Option<String>,
+    },
+
     /// Run pending jobs
     Run {
         /// Specific job ID to run
         #[arg(short, long)]
         job: Option<String>,
+
+        /// Preview what would run without executing
+        #[arg(long)]
+        dry_run: bool,
 
         /// Resume stuck jobs (pending_work or pending_verification)
         #[arg(long)]
@@ -119,7 +134,7 @@ async fn main() {
 
     // Set up logging
     let level = if cli.verbose { Level::DEBUG } else { Level::INFO };
-    let subscriber = FmtSubscriber::builder()
+    let _subscriber = FmtSubscriber::builder()
         .with_max_level(level)
         .with_target(false)
         .without_time()
@@ -131,8 +146,14 @@ async fn main() {
             init_project(&project_root)
         }
 
+        Commands::Reset { job, status } => {
+            let project_root = std::env::current_dir().unwrap();
+            crate::commands::reset::reset_jobs(&project_root, &job, status.as_deref())
+        }
+
         Commands::Run {
             job,
+            dry_run,
             resume,
             reset,
             model,
@@ -146,6 +167,7 @@ async fn main() {
             let project_root = std::env::current_dir().unwrap();
             let options = RunOptions {
                 job_id: job,
+                dry_run,
                 resume,
                 reset,
                 model,

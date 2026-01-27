@@ -9,6 +9,8 @@ use crate::models::JobStatus;
 pub struct RunOptions {
     /// Specific job to run (if None, run all pending)
     pub job_id: Option<String>,
+    /// Preview what would run without executing jobs
+    pub dry_run: bool,
     /// Resume stuck jobs
     pub resume: bool,
     /// Reset specific job to created status
@@ -33,6 +35,7 @@ impl Default for RunOptions {
     fn default() -> Self {
         Self {
             job_id: None,
+            dry_run: false,
             resume: false,
             reset: None,
             model: None,
@@ -68,6 +71,24 @@ pub async fn run_jobs(project_root: &PathBuf, options: RunOptions) -> Result<(),
     // Run specific job or all jobs
     if let Some(job_id) = options.job_id {
         info!("Running single job: {}", job_id);
+        // Keep behavior, but update dry-run output text to mention jobs
+        
+        if options.dry_run {
+            println!("=== DRY RUN ===\n");
+            if let Ok(job) = runner.jobs_manager().parse_job(&job_id) {
+                println!("  {} [{:?}]", job_id, job.metadata.mode);
+                println!("    Context: {:?}", job.metadata.context_files);
+                println!("    Output:  {}", job.metadata.output_path().display());
+                if let Some(targets) = &job.metadata.target_files {
+                    println!("    Targets: {:?}", targets);
+                }
+            } else {
+                println!("  {} [Error parsing job]", job_id);
+            }
+            println!("\nRun without --dry-run to execute.");
+            return Ok(());
+        }
+
         let result = runner.run_single(&job_id).await?;
         
         print_job_result(&result.job_id, result.status, result.error.as_deref(), result.output_lines);
@@ -79,6 +100,15 @@ pub async fn run_jobs(project_root: &PathBuf, options: RunOptions) -> Result<(),
         }
     } else if options.batch {
         info!("Running in batch mode");
+
+        if options.dry_run {
+            println!("=== DRY RUN (BATCH) ===\n");
+            // Simplified preview for batch mode
+            println!("Would process jobs in dependency order/batches.");
+            println!("Run without --dry-run to execute.");
+            return Ok(());
+        }
+
         let summary = runner.run_batch(options.resume, options.stop_on_fail, options.max_concurrent).await?;
         
         println!("\n=== Batch Run Summary ===");
@@ -102,6 +132,14 @@ pub async fn run_jobs(project_root: &PathBuf, options: RunOptions) -> Result<(),
         }
     } else {
         info!("Running all pending jobs");
+
+        if options.dry_run {
+            println!("=== DRY RUN (ALL) ===\n");
+            println!("Would process all pending jobs in order.");
+            println!("Run without --dry-run to execute.");
+            return Ok(());
+        }
+
         let summary = runner.run_all(options.resume, options.stop_on_fail).await?;
         
         println!("\n=== Run Summary ===");
