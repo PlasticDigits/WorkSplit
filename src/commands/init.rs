@@ -215,17 +215,41 @@ fn print_next_steps(project_root: &PathBuf, language: Language, model: &str) {
     println!("WorkSplit project initialized at {}", project_root.display());
     println!("\nLanguage: {}", language.display_name());
     println!("\nModel: {}", model);
+    
+    // Key tips box for AI managers
+    println!("\n┌─────────────────────────────────────────────────────────────────┐");
+    println!("│                    KEY TIPS FOR AI MANAGERS                     │");
+    println!("├─────────────────────────────────────────────────────────────────┤");
+    println!("│ 1. USE `worksplit new-job` to create jobs (don't write manually)│");
+    println!("│    Example: worksplit new-job feat_001 --template replace \\    │");
+    println!("│             -o src/ -f myfile.ts                                │");
+    println!("│                                                                 │");
+    println!("│ 2. RUN `worksplit validate` before `worksplit run`              │");
+    println!("│    Catches job file errors before expensive LLM calls           │");
+    println!("│                                                                 │");
+    println!("│ 3. DON'T use WorkSplit for < 100 lines of changes               │");
+    println!("│    Direct editing is faster; break-even is ~300 lines           │");
+    println!("│                                                                 │");
+    println!("│ 4. AVOID edit mode (low reliability ~50%)                       │");
+    println!("│    Prefer replace mode or direct editing for small changes      │");
+    println!("│                                                                 │");
+    println!("│ 5. CHECK status efficiently: `worksplit status --summary`       │");
+    println!("│    Only read generated files if status shows FAIL               │");
+    println!("└─────────────────────────────────────────────────────────────────┘");
+    
     println!("\nNext steps:");
     println!("1. Review jobs/_managerinstruction.md for guidance on creating job files");
-    println!("2. Create job files in the jobs/ directory");
-    println!("3. Run 'worksplit run' to process jobs");
+    println!("2. Create job files: worksplit new-job <name> --template <type>");
+    println!("3. Validate: worksplit validate");
+    println!("4. Run: worksplit run");
+    println!("5. Check: worksplit status -v");
+    
     println!("\nSystem prompts created:");
     println!("  - _systemprompt_create.md  (code generation)");
     println!("  - _systemprompt_verify.md  (code verification)");
     println!("  - _systemprompt_edit.md    (edit mode)");
     println!("  - _systemprompt_split.md   (split mode)");
     println!("  - _systemprompt_test.md    (TDD test generation)");
-    println!("\nTip: Add 'test_file: <filename>' to job frontmatter to enable TDD workflow");
     
     match language {
         Language::Rust => {
@@ -244,9 +268,13 @@ fn print_next_steps(project_root: &PathBuf, language: Language, model: &str) {
         }
         Language::Typescript => {
             println!("\nTypeScript-specific tips:");
-            println!("- Use .ts extension for output files");
+            println!("- Use .ts/.tsx extension for output files");
             println!("- Build command: npm run build");
             println!("- Test command: npm test");
+            println!("- For React components: generate .tsx and .css in the SAME job");
+            println!("  (ensures CSS class names match JSX classNames)");
         }
     }
+    
+    println!("\nTip: Add 'test_file: <filename>' to job frontmatter to enable TDD workflow");
 }

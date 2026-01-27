@@ -196,3 +196,62 @@ Examples:
 ```
 
 This ensures jobs run in dependency order (alphabetically).
+
+## React Component Jobs
+
+When creating React components with CSS, follow this pattern:
+
+### Job Structure for React Features
+
+1. **Logic job** (pure TypeScript, no React)
+   - Business logic, utilities, types
+   - No JSX dependencies
+   
+2. **Component job** (React + CSS together)
+   - Generate `.tsx` and `.css` in the same job using multi-file output
+   - This ensures class names match between JSX and CSS
+
+### Example: Multi-File React Job
+
+```markdown
+---
+context_files:
+  - src/utils/calculator.ts
+output_dir: src/components/
+output_file: Calculator.tsx
+---
+
+# Create Calculator Component with Styles
+
+Generate both the React component AND its CSS file together.
+
+## Files to Generate
+1. `src/components/Calculator.tsx` - React component
+2. `src/components/Calculator.css` - Component styles
+
+## CSS Requirements
+- Use CSS Grid for button layout
+- If using wrapper divs (like .button-row), add `display: contents`
+- Set explicit background-color on all interactive elements
+- Include hover and active states
+```
+
+### Common React/CSS Issues to Avoid
+
+| Issue | Cause | Solution |
+|-------|-------|----------|
+| Grid layout broken | Wrapper `<div>` between grid parent and children | Add `display: contents` to wrapper |
+| Buttons invisible | No default background-color set | Always set explicit `background-color` |
+| Class mismatch | CSS selector doesn't match JSX className | Generate component and CSS in same job |
+| Hover not working | Missing `:hover` pseudo-class | Include interactive states in CSS |
+
+## TypeScript Strict Mode
+
+All generated TypeScript code must pass strict mode. Key requirements:
+
+- Use `export type { ... }` for type-only re-exports
+- Never leave unused variables (use `_` prefix if intentionally unused)
+- Always handle null/undefined explicitly
+- No implicit `any` types
+
+See `_systemprompt_create.md` for detailed examples.
