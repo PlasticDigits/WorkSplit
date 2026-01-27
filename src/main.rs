@@ -10,7 +10,10 @@ mod error;
 mod models;
 mod templates;
 
-use commands::{cancel_jobs, create_new_job, init_project, print_validation_result, retry_job, run_jobs, show_status, validate_jobs, RunOptions};
+use commands::{
+    cancel_jobs, create_new_job, fix_job, init_project, lint_jobs, preview_job,
+    print_validation_result, retry_job, run_jobs, show_status, validate_jobs, RunOptions,
+};
 use models::{JobTemplate, Language};
 
 /// WorkSplit - Ollama-powered job orchestrator for code generation
@@ -39,7 +42,7 @@ enum Commands {
         lang: Option<Language>,
 
         /// Ollama model to use (prompts interactively if not specified)
-        /// 
+        ///
         /// AI Manager Note: If you are an AI assistant, STOP and ask the user
         /// which model they want before running this command.
         #[arg(short, long)]
@@ -128,6 +131,25 @@ enum Commands {
 
     /// Validate jobs folder structure
     Validate,
+
+    /// Preview the prompt for a job without running it
+    Preview {
+        /// Job ID to preview
+        job: String,
+    },
+
+    /// Run linter on generated files
+    Lint {
+        /// Specific job to lint (if omitted, lints all passed jobs)
+        #[arg(short, long)]
+        job: Option<String>,
+    },
+
+    /// Auto-fix linter errors using LLM
+    Fix {
+        /// Job ID whose output to fix
+        job: String,
+    },
 
     /// Create a new job from a template
     NewJob {
@@ -239,6 +261,21 @@ async fn main() {
                 }
                 Err(e) => Err(e),
             }
+        }
+
+        Commands::Preview { job } => {
+            let project_root = std::env::current_dir().unwrap();
+            preview_job(&project_root, &job)
+        }
+
+        Commands::Lint { job } => {
+            let project_root = std::env::current_dir().unwrap();
+            lint_jobs(&project_root, job.as_deref())
+        }
+
+        Commands::Fix { job } => {
+            let project_root = std::env::current_dir().unwrap();
+            fix_job(&project_root, &job).await
         }
 
         Commands::NewJob {

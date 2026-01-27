@@ -153,6 +153,8 @@ pub struct BuildConfig {
     pub build_command: Option<String>,
     /// Command to run tests (optional)
     pub test_command: Option<String>,
+    /// Command to run linter (optional)
+    pub lint_command: Option<String>,
     /// Whether to run build verification after generation
     #[serde(default = "default_verify_build")]
     pub verify_build: bool,
@@ -166,6 +168,7 @@ impl Default for BuildConfig {
         Self {
             build_command: None,
             test_command: None,
+            lint_command: None,
             verify_build: default_verify_build(),
             verify_tests: default_verify_tests(),
         }

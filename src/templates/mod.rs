@@ -26,6 +26,8 @@ pub struct Templates {
     pub split_prompt: &'static str,
     /// System prompt for test generation (TDD)
     pub test_prompt: &'static str,
+    /// System prompt for auto-fix mode
+    pub fix_prompt: &'static str,
     /// Manager instructions for creating jobs
     pub manager_instruction: &'static str,
     /// Default configuration content

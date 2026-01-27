@@ -20,5 +20,6 @@ create_output_dirs = true
 [build]
 build_command = "forge build"
 test_command = "forge test"
+lint_command = "forge fmt --check"
 verify_build = false
 verify_tests = false

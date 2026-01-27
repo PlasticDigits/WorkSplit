@@ -180,3 +180,107 @@ When `test_file` is specified:
 1. Foundry tests are generated FIRST based on requirements
 2. Implementation is then generated to pass tests
 3. Implementation is verified against requirements
+
+## Cost-Reduction Tools
+
+WorkSplit provides several tools to catch issues early and reduce expensive retries:
+
+### `worksplit preview <job>` - Preview Before Running
+
+Show the full prompt that would be sent to Ollama without actually running the job.
+
+```bash
+worksplit preview my_job_001
+```
+
+**When to use**:
+- Before running jobs with large context files
+- To verify the prompt looks correct before spending LLM tokens
+- When debugging why a job isn't generating expected output
+
+**Output includes**:
+- Job mode and output path
+- Context files with line counts
+- System prompt preview
+- Job instructions
+- Estimated token count
+
+### `worksplit lint [--job <job>]` - Check Generated Code
+
+Run linters on generated code immediately after generation.
+
+```bash
+# Lint a specific job's output
+worksplit lint --job my_job_001
+
+# Lint all passed jobs
+worksplit lint
+```
+
+**Requires** `lint_command` in `worksplit.toml`:
+```toml
+[build]
+lint_command = "forge fmt --check"
+```
+
+**When to use**:
+- After `worksplit run` completes to catch Solidity formatting/style issues
+- Before committing generated contracts
+- To verify code follows Foundry conventions
+
+### `worksplit fix <job>` - Auto-Fix Linter Errors
+
+Automatically fix common linter issues using LLM.
+
+```bash
+worksplit fix my_job_001
+```
+
+**How it works**:
+1. Runs the configured `lint_command` on the job's output
+2. Sends linter output + source to LLM with `_systemprompt_fix.md`
+3. LLM generates FIND/REPLACE blocks for mechanical fixes
+4. Applies the fixes and re-runs linter to verify
+
+**Best for fixing**:
+- Missing visibility modifiers (`public`, `private`, etc.)
+- State mutability warnings (`view`, `pure`)
+- SPDX license identifier issues
+- Missing `override`/`virtual` keywords
+- Unused variable warnings
+
+**Not suitable for**:
+- Security vulnerabilities
+- Gas optimization issues
+- Complex logic errors
+- Architectural decisions
+
+### Recommended Workflow
+
+```bash
+# 1. Create and validate job
+worksplit new-job token_001 --template replace -o src/ -f Token.sol
+# (edit the job file to add requirements)
+worksplit validate
+
+# 2. Preview before running (optional but recommended for large jobs)
+worksplit preview token_001
+
+# 3. Run the job
+worksplit run --job token_001
+
+# 4. Check status
+worksplit status
+
+# 5. If passed, run linter
+worksplit lint --job token_001
+
+# 6. If lint errors, auto-fix
+worksplit fix token_001
+
+# 7. Verify fix worked
+worksplit lint --job token_001
+
+# 8. Run Foundry tests
+forge test
+```

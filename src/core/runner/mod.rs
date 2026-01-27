@@ -517,62 +517,71 @@ impl Runner {
 
         self.verify_with_build(&job, &generated_files).await?;
 
-        self.status_manager.update_status(job_id, JobStatus::PendingVerification)?;
-
-        let effective_verify = if job.metadata.is_edit_mode() { verify_edit_prompt } else { verify_prompt };
-        let (mut final_result, final_error) = verify::run_verification(
-            &self.ollama,
-            effective_verify,
-            &context_files,
-            &generated_files,
-            &job.instructions,
-        ).await?;
-
+        // Check if verification is disabled for this job
+        let mut final_status = JobStatus::Pass;
+        let mut final_error: Option<String> = None;
         let mut retry_attempted = false;
-        let mut final_status = final_result.to_job_status();
-        let mut final_error = final_error;
 
-        if !final_result.is_pass() {
-            info!("Verification failed, retrying...");
-            retry_attempted = true;
-            let error_msg = final_error.clone().unwrap_or_default();
-            
-            let retry_files = verify::run_retry(
-                &self.ollama,
-                create_prompt,
-                &context_files,
-                &generated_files,
-                &job.instructions,
-                &error_msg,
-            ).await?;
+        if !job.metadata.verify {
+            info!("Verification skipped (verify: false in job metadata)");
+            self.status_manager.update_status(job_id, JobStatus::Pass)?;
+        } else {
+            self.status_manager.update_status(job_id, JobStatus::PendingVerification)?;
 
-            for (path, content) in &retry_files {
-                let full_path = self.project_root.join(path);
-                if let Some(parent) = full_path.parent() {
-                    if !parent.exists() && self.config.behavior.create_output_dirs { fs::create_dir_all(parent)?; }
-                }
-                self.safe_write(&full_path, content)?;
-                self.modified_files.push(full_path.clone());
-            }
-            
-            full_output_paths = retry_files.iter().map(|(p, _)| self.project_root.join(p)).collect();
-            
-            let (r, e) = verify::run_verification(
+            let effective_verify = if job.metadata.is_edit_mode() { verify_edit_prompt } else { verify_prompt };
+            let (mut final_result, mut err) = verify::run_verification(
                 &self.ollama,
                 effective_verify,
                 &context_files,
-                &retry_files,
+                &generated_files,
                 &job.instructions,
             ).await?;
-            final_result = r;
-            final_error = e;
-            final_status = final_result.to_job_status();
-        }
 
-        if let Some(ref msg) = final_error {
-            self.status_manager.set_failed(job_id, msg.clone())?;
-        } else {
-            self.status_manager.update_status(job_id, final_status)?;
+            final_status = final_result.to_job_status();
+            final_error = err;
+
+            if !final_result.is_pass() {
+                info!("Verification failed, retrying...");
+                retry_attempted = true;
+                let error_msg = final_error.clone().unwrap_or_default();
+                
+                let retry_files = verify::run_retry(
+                    &self.ollama,
+                    create_prompt,
+                    &context_files,
+                    &generated_files,
+                    &job.instructions,
+                    &error_msg,
+                ).await?;
+
+                for (path, content) in &retry_files {
+                    let full_path = self.project_root.join(path);
+                    if let Some(parent) = full_path.parent() {
+                        if !parent.exists() && self.config.behavior.create_output_dirs { fs::create_dir_all(parent)?; }
+                    }
+                    self.safe_write(&full_path, content)?;
+                    self.modified_files.push(full_path.clone());
+                }
+                
+                full_output_paths = retry_files.iter().map(|(p, _)| self.project_root.join(p)).collect();
+                
+                let (r, e) = verify::run_verification(
+                    &self.ollama,
+                    effective_verify,
+                    &context_files,
+                    &retry_files,
+                    &job.instructions,
+                ).await?;
+                final_result = r;
+                final_error = e;
+                final_status = final_result.to_job_status();
+            }
+
+            if let Some(ref msg) = final_error {
+                self.status_manager.set_failed(job_id, msg.clone())?;
+            } else {
+                self.status_manager.update_status(job_id, final_status)?;
+            }
         }
 
         if final_status == JobStatus::Pass {

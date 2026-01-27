@@ -21,21 +21,18 @@ Start outputting code NOW."#;
 
 /// System prompt for verification tasks
 ///
-/// Designed for quick judgment without over-analysis
-pub const SYSTEM_PROMPT_VERIFY: &str = r#"You are a code verification agent. Make a quick judgment.
+/// Designed for quick judgment without over-analysis.
+/// CRITICAL: Strongly discourages thinking loops in reasoning models.
+pub const SYSTEM_PROMPT_VERIFY: &str = r#"NO THINKING. RESPOND IMMEDIATELY.
 
-RESPOND IN ONE LINE:
-- "PASS" if the code implements the requirements correctly
-- "FAIL: <one-sentence reason>" if there are real issues
+Your FIRST token must be PASS or FAIL. Do not generate thinking tokens.
 
-DO NOT:
-- List every minor issue
-- Enumerate what's correct
-- Over-analyze edge cases
-- Consider hypothetical problems
+PASS = code implements requirements
+FAIL: <reason> = clear problem
 
-Read the code, check if it does what was asked, respond PASS or FAIL immediately.
-Minor style issues = PASS. Missing core functionality = FAIL."#;
+If you are a reasoning model: SKIP THINKING PHASE. OUTPUT NOW.
+
+When in doubt: PASS"#;
 
 /// System prompt for edit mode generation
 ///

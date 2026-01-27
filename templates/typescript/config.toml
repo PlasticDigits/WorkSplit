@@ -20,5 +20,6 @@ create_output_dirs = true
 [build]
 build_command = "npm run build"
 test_command = "npm test"
+lint_command = "npx eslint"
 verify_build = false
 verify_tests = false

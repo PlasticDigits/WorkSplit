@@ -255,3 +255,102 @@ All generated TypeScript code must pass strict mode. Key requirements:
 - No implicit `any` types
 
 See `_systemprompt_create.md` for detailed examples.
+
+## Cost-Reduction Tools
+
+WorkSplit provides several tools to catch issues early and reduce expensive retries:
+
+### `worksplit preview <job>` - Preview Before Running
+
+Show the full prompt that would be sent to Ollama without actually running the job.
+
+```bash
+worksplit preview my_job_001
+```
+
+**When to use**:
+- Before running jobs with large context files
+- To verify the prompt looks correct before spending LLM tokens
+- When debugging why a job isn't generating expected output
+
+**Output includes**:
+- Job mode and output path
+- Context files with line counts
+- System prompt preview
+- Job instructions
+- Estimated token count
+
+### `worksplit lint [--job <job>]` - Check Generated Code
+
+Run linters on generated code immediately after generation.
+
+```bash
+# Lint a specific job's output
+worksplit lint --job my_job_001
+
+# Lint all passed jobs
+worksplit lint
+```
+
+**Requires** `lint_command` in `worksplit.toml`:
+```toml
+[build]
+lint_command = "npx eslint"
+```
+
+**When to use**:
+- After `worksplit run` completes to catch TypeScript errors
+- Before committing generated code
+- To verify strict mode compliance
+
+### `worksplit fix <job>` - Auto-Fix Linter Errors
+
+Automatically fix common linter issues using LLM.
+
+```bash
+worksplit fix my_job_001
+```
+
+**How it works**:
+1. Runs the configured `lint_command` on the job's output
+2. Sends linter output + source to LLM with `_systemprompt_fix.md`
+3. LLM generates FIND/REPLACE blocks for mechanical fixes
+4. Applies the fixes and re-runs linter to verify
+
+**Best for fixing**:
+- Unused variables/imports (removes or prefixes with `_`)
+- Missing type exports (`export type` vs `export`)
+- Implicit `any` types
+- Type-only imports (`import type` vs `import`)
+
+**Not suitable for**:
+- Complex type errors requiring design decisions
+- Logic errors
+- Architectural issues
+
+### Recommended Workflow
+
+```bash
+# 1. Create and validate job
+worksplit new-job feat_001 --template replace -o src/ -f myService.ts
+# (edit the job file to add requirements)
+worksplit validate
+
+# 2. Preview before running (optional but recommended for large jobs)
+worksplit preview feat_001
+
+# 3. Run the job
+worksplit run --job feat_001
+
+# 4. Check status
+worksplit status
+
+# 5. If passed, run linter
+worksplit lint --job feat_001
+
+# 6. If lint errors, auto-fix
+worksplit fix feat_001
+
+# 7. Verify fix worked
+worksplit lint --job feat_001
+```

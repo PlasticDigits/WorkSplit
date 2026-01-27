@@ -74,6 +74,11 @@ pub fn init_project(project_root: &PathBuf, lang: Option<Language>, model: Optio
     )?;
 
     create_file_if_not_exists(
+        &jobs_dir.join("_systemprompt_fix.md"),
+        templates.fix_prompt,
+    )?;
+
+    create_file_if_not_exists(
         &jobs_dir.join("_managerinstruction.md"),
         templates.manager_instruction,
     )?;
@@ -250,6 +255,7 @@ fn print_next_steps(project_root: &PathBuf, language: Language, model: &str) {
     println!("  - _systemprompt_edit.md    (edit mode)");
     println!("  - _systemprompt_split.md   (split mode)");
     println!("  - _systemprompt_test.md    (TDD test generation)");
+    println!("  - _systemprompt_fix.md     (auto-fix mode)");
     
     match language {
         Language::Rust => {

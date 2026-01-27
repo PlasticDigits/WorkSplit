@@ -1,6 +1,9 @@
 pub mod cancel;
+pub mod fix;
 pub mod init;
+pub mod lint;
 pub mod new_job;
+pub mod preview;
 pub mod reset;
 pub mod retry;
 pub mod run;
@@ -8,8 +11,11 @@ pub mod status;
 pub mod validate;
 
 pub use cancel::*;
+pub use fix::*;
 pub use init::*;
+pub use lint::*;
 pub use new_job::*;
+pub use preview::*;
 pub use retry::*;
 pub use run::*;
 pub use status::*;

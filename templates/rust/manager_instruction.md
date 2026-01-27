@@ -196,3 +196,102 @@ Examples:
 ```
 
 This ensures jobs run in dependency order (alphabetically).
+
+## Cost-Reduction Tools
+
+WorkSplit provides several tools to catch issues early and reduce expensive retries:
+
+### `worksplit preview <job>` - Preview Before Running
+
+Show the full prompt that would be sent to Ollama without actually running the job.
+
+```bash
+worksplit preview my_job_001
+```
+
+**When to use**:
+- Before running jobs with large context files
+- To verify the prompt looks correct before spending LLM tokens
+- When debugging why a job isn't generating expected output
+
+**Output includes**:
+- Job mode and output path
+- Context files with line counts
+- System prompt preview
+- Job instructions
+- Estimated token count
+
+### `worksplit lint [--job <job>]` - Check Generated Code
+
+Run linters on generated code immediately after generation.
+
+```bash
+# Lint a specific job's output
+worksplit lint --job my_job_001
+
+# Lint all passed jobs
+worksplit lint
+```
+
+**Requires** `lint_command` in `worksplit.toml`:
+```toml
+[build]
+lint_command = "cargo clippy -- -D warnings"
+```
+
+**When to use**:
+- After `worksplit run` completes to catch Rust errors
+- Before committing generated code
+- To verify code quality without manual review
+
+### `worksplit fix <job>` - Auto-Fix Linter Errors
+
+Automatically fix common linter issues using LLM.
+
+```bash
+worksplit fix my_job_001
+```
+
+**How it works**:
+1. Runs the configured `lint_command` on the job's output
+2. Sends linter output + source to LLM with `_systemprompt_fix.md`
+3. LLM generates FIND/REPLACE blocks for mechanical fixes
+4. Applies the fixes and re-runs linter to verify
+
+**Best for fixing**:
+- Unused variables (removes or prefixes with `_`)
+- Dead code warnings (adds `#[allow(dead_code)]`)
+- Missing imports
+- Simple type errors
+
+**Not suitable for**:
+- Complex logic errors
+- Design issues
+- Anything requiring architectural decisions
+
+### Recommended Workflow
+
+```bash
+# 1. Create and validate job
+worksplit new-job feat_001 --template replace -o src/ -f my_module.rs
+# (edit the job file to add requirements)
+worksplit validate
+
+# 2. Preview before running (optional but recommended for large jobs)
+worksplit preview feat_001
+
+# 3. Run the job
+worksplit run --job feat_001
+
+# 4. Check status
+worksplit status
+
+# 5. If passed, run linter
+worksplit lint --job feat_001
+
+# 6. If lint errors, auto-fix
+worksplit fix feat_001
+
+# 7. Verify fix worked
+worksplit lint --job feat_001
+```

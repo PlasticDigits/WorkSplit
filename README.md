@@ -140,6 +140,9 @@ Every feature in WorkSplit is designed to reduce what the manager must read, wri
 - **Build verification**: Optional build/test commands via `worksplit.toml`
 - **Batch processing**: Run all jobs with `worksplit run`, check results once at the end
 - **Watch mode**: `worksplit status --watch` for real-time progress monitoring
+- **Preview mode**: `worksplit preview <job>` to see prompts before running
+- **Lint command**: `worksplit lint` to check generated code for errors
+- **Auto-fix**: `worksplit fix <job>` to auto-fix linter errors using LLM
 
 ## Installation
 
@@ -545,6 +548,64 @@ Retry a failed job from the beginning.
 worksplit retry my_job_001
 ```
 
+### `worksplit preview`
+
+Preview the full prompt that would be sent to Ollama without actually running the job. This helps catch issues before expensive LLM calls.
+
+```bash
+# Preview a specific job
+worksplit preview my_job_001
+```
+
+Output includes:
+- Job mode and output path
+- Context files with line counts
+- Target files (for edit mode)
+- System prompt preview
+- Job instructions
+- Estimated token count and model info
+
+**When to use**: Before running jobs with large context files, to verify the prompt looks correct.
+
+### `worksplit lint`
+
+Run linters on generated code to catch errors immediately after generation.
+
+```bash
+# Lint a specific job's output
+worksplit lint --job my_job_001
+
+# Lint all passed jobs' outputs
+worksplit lint
+```
+
+**Requires**: `lint_command` in `worksplit.toml`:
+```toml
+[build]
+lint_command = "cargo clippy -- -D warnings"  # Rust
+lint_command = "npx eslint"                    # TypeScript
+lint_command = "forge fmt --check"             # Solidity
+```
+
+**When to use**: After `worksplit run` completes, to catch syntax/style errors before committing.
+
+### `worksplit fix`
+
+Auto-fix common linter issues using LLM.
+
+```bash
+# Fix a specific job's output
+worksplit fix my_job_001
+```
+
+How it works:
+1. Runs the configured `lint_command` on the job's output file
+2. If errors found, sends linter output + source file to LLM with `_systemprompt_fix.md`
+3. Parses and applies FIND/REPLACE blocks from LLM response
+4. Re-runs linter to verify fixes worked
+
+**When to use**: After `worksplit lint` shows errors that are mechanical (unused variables, missing type exports, etc.).
+
 ### `worksplit status`
 
 Show job status summary.
@@ -599,6 +660,7 @@ max_context_files = 2
 [build]
 # build_command = "cargo check"
 # test_command = "cargo test"
+# lint_command = "cargo clippy -- -D warnings"
 # verify_build = true
 # verify_tests = false
 

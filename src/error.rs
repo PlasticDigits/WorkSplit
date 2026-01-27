@@ -107,6 +107,18 @@ pub enum WorkSplitError {
 
     #[error("Initialization error: {0}")]
     InitError(String),
+
+    #[error("Configuration error: {0}")]
+    ConfigError(String),
+
+    #[error("Lint error: {0}")]
+    LintError(String),
+
+    #[error("Job error: {0}")]
+    JobError(String),
+
+    #[error("IO error: {0}")]
+    IoError(String),
 }
 
 /// Errors related to job file parsing

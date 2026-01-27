@@ -13,6 +13,7 @@ pub fn templates() -> Templates {
         verify_edit_prompt: include_str!("../../templates/typescript/systemprompt_verify_edit.md"),
         split_prompt: include_str!("../../templates/typescript/systemprompt_split.md"),
         test_prompt: include_str!("../../templates/typescript/systemprompt_test.md"),
+        fix_prompt: include_str!("../../templates/typescript/systemprompt_fix.md"),
         manager_instruction: include_str!("../../templates/typescript/manager_instruction.md"),
         config: include_str!("../../templates/typescript/config.toml"),
         example_job: include_str!("../../templates/typescript/example_job.md"),
