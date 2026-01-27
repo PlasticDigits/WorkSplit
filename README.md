@@ -22,21 +22,6 @@ WorkSplit shifts the expensive work to a **free local LLM** (Ollama), so the man
 | 200-500 lines | **WorkSplit preferred** | Ollama handles bulk generation free |
 | 500+ lines | **WorkSplit strongly preferred** | Significant cost savings |
 
-### Real-World Cost Comparison
-
-Based on actual usage data:
-
-| Commit | Approach | Lines Changed | Cost | Cost/Line |
-|--------|----------|---------------|------|-----------|
-| Add TypeScript support | Direct LLM | 1,370 lines | $1.47 | $0.0011 |
-| Add model flag to init | WorkSplit | 130 lines | $1.05 | $0.0081 |
-
-**Key insight**: The small task (130 lines) cost **7.5x more per line** with WorkSplit due to:
-- Job file creation and editing
-- Failed edit mode attempt requiring retry
-- Verification loops
-- Manager LLM coordination overhead
-
 ### Decision Flowchart for AI Managers
 
 ```
@@ -146,13 +131,24 @@ Every feature in WorkSplit is designed to reduce what the manager must read, wri
 
 ## Installation
 
+### Download Binaries
+Pre-built binaries for Linux, macOS, and Windows are available on the [Latest Release](https://github.com/PlasticDigits/WorkSplit/releases/latest) page.
+
+### Install via Cargo
+Install via [crates.io](https://crates.io/crates/worksplit):
+
+```bash
+cargo install worksplit
+```
+
+### Build from Source
 ```bash
 # Clone and build
-git clone https://github.com/worksplit/worksplit
-cd worksplit
+git clone https://github.com/PlasticDigits/WorkSplit
+cd WorkSplit
 cargo build --release
 
-# Or install directly
+# Or install directly from path
 cargo install --path .
 ```
 

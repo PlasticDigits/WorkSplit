@@ -5,7 +5,7 @@ edition = "2021"
 description = "CLI tool that orchestrates local Ollama LLM for code generation and verification"
 authors = ["WorkSplit Contributors"]
 license = "AGPL-3.0-only"
-repository = "https://github.com/worksplit/worksplit"
+repository = "https://github.com/PlasticDigits/WorkSplit"
 keywords = ["cli", "llm", "ollama", "code-generation"]
 categories = ["command-line-utilities", "development-tools"]
 
