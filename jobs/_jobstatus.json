@@ -1,34 +1,21 @@
 [
   {
     "id": "archive_001_config",
-    "status": "fail",
+    "status": "pass",
     "created_at": "2026-01-28T05:01:42.220385181Z",
-    "updated_at": "2026-01-28T05:04:58.030721237Z",
-    "error": "No edits applied"
+    "updated_at": "2026-01-28T05:24:33.276533671Z"
   },
   {
     "id": "archive_002_archive_cmd",
-    "status": "created",
+    "status": "pass",
     "created_at": "2026-01-28T05:01:42.220394729Z",
-    "updated_at": "2026-01-28T05:01:42.220394729Z"
+    "updated_at": "2026-01-28T05:25:12.100554886Z"
   },
   {
     "id": "archive_003_cleanup_cmd",
-    "status": "created",
+    "status": "pass",
     "created_at": "2026-01-28T05:01:42.220418523Z",
-    "updated_at": "2026-01-28T05:01:42.220418523Z"
-  },
-  {
-    "id": "archive_004_wire",
-    "status": "created",
-    "created_at": "2026-01-28T05:01:42.220423232Z",
-    "updated_at": "2026-01-28T05:01:42.220423232Z"
-  },
-  {
-    "id": "archive_005_auto_run",
-    "status": "created",
-    "created_at": "2026-01-28T05:01:42.220428312Z",
-    "updated_at": "2026-01-28T05:01:42.220428312Z"
+    "updated_at": "2026-01-28T05:25:51.650156762Z"
   },
   {
     "id": "batch_001_concurrent_status",
