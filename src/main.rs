@@ -20,7 +20,7 @@ use models::{JobTemplate, Language};
 /// WorkSplit - Ollama-powered job orchestrator for code generation
 #[derive(Parser)]
 #[command(name = "worksplit")]
-#[command(author, version, about, long_about = None)]
+#[command(author, version, about, long_about = "CLI tool that orchestrates local Ollama LLM for code generation and verification.\n\nAI Agents: Run `worksplit readme` to get full documentation and usage instructions.")]
 struct Cli {
     /// Enable verbose output
     #[arg(short, long, global = true)]
@@ -199,6 +199,12 @@ enum Commands {
         #[arg(long)]
         dry_run: bool,
     },
+
+    /// Print the full README documentation
+    ///
+    /// AI Agents: Use this command to get complete documentation, including
+    /// job file format, mode selection guidance, success rates, and best practices.
+    Readme,
 }
 
 #[tokio::main]
@@ -353,6 +359,12 @@ async fn main() {
                 }
                 Err(e) => Err(e),
             }
+        }
+
+        Commands::Readme => {
+            const README: &str = include_str!("../README.md");
+            println!("{}", README);
+            Ok(())
         }
     };
 
