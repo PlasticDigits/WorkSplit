@@ -39,7 +39,7 @@ enum Commands {
         path: Option<PathBuf>,
 
         /// Programming language for the project (prompts interactively if not specified)
-        #[arg(short, long, value_enum)]
+        #[arg(short, long, visible_alias = "language", value_enum)]
         lang: Option<Language>,
 
         /// Ollama model to use (prompts interactively if not specified)
