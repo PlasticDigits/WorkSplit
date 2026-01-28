@@ -2,6 +2,13 @@
 
 This document explains how to create job files for WorkSplit when breaking down a feature into implementable chunks.
 
+## REQUIRED READING
+
+Before creating jobs, read the **Success Rate by Job Type** table in README.md.
+Edit mode has **20-50% success rate** for most use cases - prefer replace mode.
+
+---
+
 ## CRITICAL: When to Use WorkSplit vs Direct Editing
 
 **WorkSplit has overhead** (job creation, validation, verification, retries). Only use it when the cost savings outweigh this overhead.
@@ -62,13 +69,63 @@ After running, edit the generated `jobs/<name>.md` to add specific requirements.
 
 ### When to Use Each Template
 
-| Template | Use When | Reliability |
-|----------|----------|-------------|
-| `replace` | Creating new files or completely rewriting existing ones | High |
-| `edit` | Making 2-5 small, isolated changes to existing files | Medium |
-| `split` | A file exceeds 900 lines and needs to be modularized | High |
-| `sequential` | Generating multiple interdependent files | High |
-| `tdd` | You want tests generated before implementation | High |
+| Template | Use When | Success Rate |
+|----------|----------|--------------|
+| `replace` | Creating new files or completely rewriting existing ones | ~95% |
+| `edit` | Making 1-2 small changes to EXISTING code (not adding new code) | ~50-70% |
+| `split` | A file exceeds 900 lines and needs to be modularized | ~90% |
+| `sequential` | Generating multiple interdependent files | ~85% |
+| `tdd` | You want tests generated before implementation | ~90% |
+
+---
+
+## CRITICAL: Edit Mode Limitations
+
+Edit mode has a **high failure rate**. Before using it, complete this checklist:
+
+### Edit Mode Checklist
+
+```
+STOP - Before using edit mode, ask:
+
+1. Am I EDITING existing code or ADDING new code?
+   - Adding new structs/functions/impl blocks → Use REPLACE mode
+   - Modifying existing lines only → Edit mode MAY work
+
+2. How many lines total am I changing?
+   - < 10 lines → Do it MANUALLY (faster than job creation)
+   - 10-50 lines in ONE location → Edit mode okay
+   - > 50 lines → Use REPLACE mode
+
+3. Are my changes isolated or interconnected?
+   - Interconnected (struct + impl + tests) → Use REPLACE mode
+   - Single isolated change → Edit mode okay
+
+4. How many FIND/REPLACE blocks will this need?
+   - 1-2 blocks → Edit mode okay (~70% success)
+   - 3-5 blocks → Edit mode risky (~50% success)
+   - 5+ blocks → Use REPLACE mode (edit WILL fail)
+
+5. Am I modifying multiple files?
+   - YES → Use REPLACE mode or separate jobs (edit ~30% success)
+   - NO → Continue
+```
+
+### Edit Mode Failure Recovery
+
+If edit mode fails:
+
+1. **Do NOT retry edit mode more than once**
+2. **Switch to replace mode** - regenerate the entire file
+3. **Or do it manually** - often faster for small changes
+
+Common edit mode failure causes:
+- Too many FIND/REPLACE blocks
+- Adding new code instead of editing existing code
+- Interconnected changes across multiple locations
+- Whitespace/indentation mismatches
+
+---
 
 ## Job File Format
 
@@ -108,13 +165,13 @@ output_file: user_service.rs
 
 ## Output Modes
 
-### 1. Replace Mode (Default)
+### 1. Replace Mode (Default) - PREFERRED
 
-Standard mode that generates complete files.
+Standard mode that generates complete files. **Use this for most cases.**
 
-### 2. Edit Mode (Surgical Changes)
+### 2. Edit Mode (Surgical Changes) - USE WITH CAUTION
 
-For making small, surgical changes to existing files:
+For making small, surgical changes to existing files. **Read the checklist above first.**
 
 ```markdown
 ---

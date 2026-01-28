@@ -1,6 +1,7 @@
 use std::path::PathBuf;
-use tracing::info;
+use tracing::{info, warn};
 
+use crate::commands::archive::run_auto_archive;
 use crate::core::{load_config, Runner};
 use crate::error::WorkSplitError;
 use crate::models::JobStatus;
@@ -164,6 +165,14 @@ pub async fn run_jobs(project_root: &PathBuf, options: RunOptions) -> Result<(),
         if options.stop_on_fail && summary.failed > 0 {
             println!("\nStopping due to failure (--stop-on-fail)");
             std::process::exit(1);
+        }
+    }
+
+    // Run auto-archive after jobs complete (which triggers auto-cleanup)
+    if !options.dry_run {
+        if let Err(e) = run_auto_archive(project_root) {
+            // Don't fail the run for archive errors, just log
+            warn!("Auto-archive failed: {}", e);
         }
     }
 

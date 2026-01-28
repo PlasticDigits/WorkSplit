@@ -2,6 +2,13 @@
 
 This document explains how to create job files for WorkSplit when breaking down a feature into implementable chunks.
 
+## REQUIRED READING
+
+Before creating jobs, read the **Success Rate by Job Type** table in README.md.
+Edit mode has **20-50% success rate** for most use cases - prefer replace mode.
+
+---
+
 ## CRITICAL: When to Use WorkSplit vs Direct Editing
 
 **WorkSplit has overhead** (job creation, validation, verification, retries). Only use it when the cost savings outweigh this overhead.
@@ -43,16 +50,16 @@ STOP - Before creating a WorkSplit job, ask:
 
 ```bash
 # Replace mode - generate a new file
-worksplit new-job feature_001 --template replace -o src/services/ -f myService.ts
+worksplit new-job feature_001 --template replace -o src/services/ -f my_service.rs
 
 # Edit mode - modify existing files  
-worksplit new-job fix_001 --template edit --targets src/main.ts
+worksplit new-job fix_001 --template edit --targets src/main.rs
 
 # With context files
-worksplit new-job impl_001 --template replace -c src/types.ts -o src/ -f api.ts
+worksplit new-job impl_001 --template replace -c src/types.rs -o src/ -f api.rs
 
 # Split mode - break large file into modules
-worksplit new-job split_001 --template split --targets src/largeFile.ts
+worksplit new-job split_001 --template split --targets src/large_file.rs
 
 # Sequential mode - multi-file with context accumulation
 worksplit new-job big_001 --template sequential -o src/
@@ -62,13 +69,63 @@ After running, edit the generated `jobs/<name>.md` to add specific requirements.
 
 ### When to Use Each Template
 
-| Template | Use When | Reliability |
-|----------|----------|-------------|
-| `replace` | Creating new files or completely rewriting existing ones | High |
-| `edit` | Making 2-5 small, isolated changes to existing files | Medium |
-| `split` | A file exceeds 900 lines and needs to be modularized | High |
-| `sequential` | Generating multiple interdependent files | High |
-| `tdd` | You want tests generated before implementation | High |
+| Template | Use When | Success Rate |
+|----------|----------|--------------|
+| `replace` | Creating new files or completely rewriting existing ones | ~95% |
+| `edit` | Making 1-2 small changes to EXISTING code (not adding new code) | ~50-70% |
+| `split` | A file exceeds 900 lines and needs to be modularized | ~90% |
+| `sequential` | Generating multiple interdependent files | ~85% |
+| `tdd` | You want tests generated before implementation | ~90% |
+
+---
+
+## CRITICAL: Edit Mode Limitations
+
+Edit mode has a **high failure rate**. Before using it, complete this checklist:
+
+### Edit Mode Checklist
+
+```
+STOP - Before using edit mode, ask:
+
+1. Am I EDITING existing code or ADDING new code?
+   - Adding new structs/functions/impl blocks → Use REPLACE mode
+   - Modifying existing lines only → Edit mode MAY work
+
+2. How many lines total am I changing?
+   - < 10 lines → Do it MANUALLY (faster than job creation)
+   - 10-50 lines in ONE location → Edit mode okay
+   - > 50 lines → Use REPLACE mode
+
+3. Are my changes isolated or interconnected?
+   - Interconnected (struct + impl + tests) → Use REPLACE mode
+   - Single isolated change → Edit mode okay
+
+4. How many FIND/REPLACE blocks will this need?
+   - 1-2 blocks → Edit mode okay (~70% success)
+   - 3-5 blocks → Edit mode risky (~50% success)
+   - 5+ blocks → Use REPLACE mode (edit WILL fail)
+
+5. Am I modifying multiple files?
+   - YES → Use REPLACE mode or separate jobs (edit ~30% success)
+   - NO → Continue
+```
+
+### Edit Mode Failure Recovery
+
+If edit mode fails:
+
+1. **Do NOT retry edit mode more than once**
+2. **Switch to replace mode** - regenerate the entire file
+3. **Or do it manually** - often faster for small changes
+
+Common edit mode failure causes:
+- Too many FIND/REPLACE blocks
+- Adding new code instead of editing existing code
+- Interconnected changes across multiple locations
+- Whitespace/indentation mismatches
+
+---
 
 ## Job File Format
 
@@ -77,21 +134,21 @@ Each job file uses YAML frontmatter followed by markdown instructions:
 ```markdown
 ---
 context_files:
-  - src/models/user.ts
-  - src/db/connection.ts
+  - src/models/user.rs
+  - src/db/connection.rs
 output_dir: src/services/
-output_file: userService.ts
+output_file: user_service.rs
 ---
 
 # Create User Service
 
 ## Requirements
-- Implement UserService class
+- Implement UserService struct
 - Add CRUD methods for User model
 
 ## Methods to Implement
-- `constructor(db: DbConnection)`
-- `createUser(user: NewUser): Promise<User>`
+- `new(db: DbConnection) -> Self`
+- `create_user(user: NewUser) -> Result<User, ServiceError>`
 ```
 
 ## Frontmatter Fields
@@ -108,26 +165,26 @@ output_file: userService.ts
 
 ## Output Modes
 
-### 1. Replace Mode (Default)
+### 1. Replace Mode (Default) - PREFERRED
 
-Standard mode that generates complete files.
+Standard mode that generates complete files. **Use this for most cases.**
 
-### 2. Edit Mode (Surgical Changes)
+### 2. Edit Mode (Surgical Changes) - USE WITH CAUTION
 
-For making small, surgical changes to existing files:
+For making small, surgical changes to existing files. **Read the checklist above first.**
 
 ```markdown
 ---
 mode: edit
 target_files:
-  - src/main.ts
+  - src/main.rs
 output_dir: src/
-output_file: main.ts
+output_file: main.rs
 ---
 
-# Add New Config Option
+# Add New CLI Flag
 
-Add the `verbose` option to the config interface.
+Add the `--verbose` flag to the run command.
 ```
 
 ### 3. Split Mode (Breaking Up Large Files)
@@ -137,13 +194,13 @@ For splitting a large file into a directory-based module structure:
 ```markdown
 ---
 mode: split
-target_file: src/services/userService.ts
-output_dir: src/services/userService/
-output_file: index.ts
+target_file: src/services/user_service.rs
+output_dir: src/services/user_service/
+output_file: mod.rs
 output_files:
-  - src/services/userService/index.ts
-  - src/services/userService/create.ts
-  - src/services/userService/query.ts
+  - src/services/user_service/mod.rs
+  - src/services/user_service/create.rs
+  - src/services/user_service/query.rs
 ---
 ```
 
@@ -154,9 +211,9 @@ For bigger changes that exceed token limits:
 ```markdown
 ---
 output_files:
-  - src/main.ts
-  - src/commands/run.ts
-  - src/core/runner.ts
+  - src/main.rs
+  - src/commands/run.rs
+  - src/core/runner.rs
 sequential: true
 ---
 ```
@@ -173,14 +230,14 @@ Each job should generate **at most 900 lines of code**. If a feature requires mo
 ### 2. Choose Context Files Wisely
 
 Context files should:
-- Define types/interfaces the generated code will use
+- Define types the generated code will use
 - Show patterns to follow (error handling, naming conventions)
 - Contain interfaces to implement
 
 ### 3. Write Clear Instructions
 
 Good instructions include:
-- **What** to create (classes, functions, interfaces)
+- **What** to create (structs, functions, traits)
 - **How** it should behave (expected logic, edge cases)
 - **Why** (context helps the LLM make good decisions)
 
@@ -196,65 +253,6 @@ Examples:
 ```
 
 This ensures jobs run in dependency order (alphabetically).
-
-## React Component Jobs
-
-When creating React components with CSS, follow this pattern:
-
-### Job Structure for React Features
-
-1. **Logic job** (pure TypeScript, no React)
-   - Business logic, utilities, types
-   - No JSX dependencies
-   
-2. **Component job** (React + CSS together)
-   - Generate `.tsx` and `.css` in the same job using multi-file output
-   - This ensures class names match between JSX and CSS
-
-### Example: Multi-File React Job
-
-```markdown
----
-context_files:
-  - src/utils/calculator.ts
-output_dir: src/components/
-output_file: Calculator.tsx
----
-
-# Create Calculator Component with Styles
-
-Generate both the React component AND its CSS file together.
-
-## Files to Generate
-1. `src/components/Calculator.tsx` - React component
-2. `src/components/Calculator.css` - Component styles
-
-## CSS Requirements
-- Use CSS Grid for button layout
-- If using wrapper divs (like .button-row), add `display: contents`
-- Set explicit background-color on all interactive elements
-- Include hover and active states
-```
-
-### Common React/CSS Issues to Avoid
-
-| Issue | Cause | Solution |
-|-------|-------|----------|
-| Grid layout broken | Wrapper `<div>` between grid parent and children | Add `display: contents` to wrapper |
-| Buttons invisible | No default background-color set | Always set explicit `background-color` |
-| Class mismatch | CSS selector doesn't match JSX className | Generate component and CSS in same job |
-| Hover not working | Missing `:hover` pseudo-class | Include interactive states in CSS |
-
-## TypeScript Strict Mode
-
-All generated TypeScript code must pass strict mode. Key requirements:
-
-- Use `export type { ... }` for type-only re-exports
-- Never leave unused variables (use `_` prefix if intentionally unused)
-- Always handle null/undefined explicitly
-- No implicit `any` types
-
-See `_systemprompt_create.md` for detailed examples.
 
 ## Cost-Reduction Tools
 
@@ -295,13 +293,13 @@ worksplit lint
 **Requires** `lint_command` in `worksplit.toml`:
 ```toml
 [build]
-lint_command = "npx eslint"
+lint_command = "cargo clippy -- -D warnings"
 ```
 
 **When to use**:
-- After `worksplit run` completes to catch TypeScript errors
+- After `worksplit run` completes to catch Rust errors
 - Before committing generated code
-- To verify strict mode compliance
+- To verify code quality without manual review
 
 ### `worksplit fix <job>` - Auto-Fix Linter Errors
 
@@ -318,21 +316,21 @@ worksplit fix my_job_001
 4. Applies the fixes and re-runs linter to verify
 
 **Best for fixing**:
-- Unused variables/imports (removes or prefixes with `_`)
-- Missing type exports (`export type` vs `export`)
-- Implicit `any` types
-- Type-only imports (`import type` vs `import`)
+- Unused variables (removes or prefixes with `_`)
+- Dead code warnings (adds `#[allow(dead_code)]`)
+- Missing imports
+- Simple type errors
 
 **Not suitable for**:
-- Complex type errors requiring design decisions
-- Logic errors
-- Architectural issues
+- Complex logic errors
+- Design issues
+- Anything requiring architectural decisions
 
 ### Recommended Workflow
 
 ```bash
 # 1. Create and validate job
-worksplit new-job feat_001 --template replace -o src/ -f myService.ts
+worksplit new-job feat_001 --template replace -o src/ -f my_module.rs
 # (edit the job file to add requirements)
 worksplit validate
 
