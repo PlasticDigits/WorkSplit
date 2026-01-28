@@ -1,6 +1,4 @@
-pub mod archive;
 pub mod cancel;
-pub mod cleanup;
 pub mod fix;
 pub mod init;
 pub mod lint;
@@ -12,9 +10,7 @@ pub mod run;
 pub mod status;
 pub mod validate;
 
-pub use archive::*;
 pub use cancel::*;
-pub use cleanup::*;
 pub use fix::*;
 pub use init::*;
 pub use lint::*;

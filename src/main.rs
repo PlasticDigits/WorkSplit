@@ -11,9 +11,8 @@ mod models;
 mod templates;
 
 use commands::{
-    archive_jobs, cancel_jobs, cleanup_archived_jobs, create_new_job, fix_job, init_project,
-    lint_jobs, preview_job, print_validation_result, retry_job, run_jobs, show_status,
-    validate_jobs, RunOptions,
+    cancel_jobs, create_new_job, fix_job, init_project, lint_jobs, preview_job,
+    print_validation_result, retry_job, run_jobs, show_status, validate_jobs, RunOptions,
 };
 use models::{JobTemplate, Language};
 
@@ -177,28 +176,6 @@ enum Commands {
         #[arg(long, short = 'c', value_delimiter = ',')]
         context_files: Option<Vec<PathBuf>>,
     },
-
-    /// Archive completed jobs older than X days
-    Archive {
-        /// Days threshold (uses config default if not specified)
-        #[arg(short, long)]
-        days: Option<u32>,
-
-        /// Preview what would be archived without moving files
-        #[arg(long)]
-        dry_run: bool,
-    },
-
-    /// Clean up old archived jobs
-    Cleanup {
-        /// Days threshold (uses config default if not specified)
-        #[arg(short, long)]
-        days: Option<u32>,
-
-        /// Preview what would be deleted
-        #[arg(long)]
-        dry_run: bool,
-    },
 }
 
 #[tokio::main]
@@ -319,40 +296,6 @@ async fn main() {
                 output_file,
                 context_files,
             )
-        }
-
-        Commands::Archive { days, dry_run } => {
-            let project_root = std::env::current_dir().unwrap();
-            match archive_jobs(&project_root, days, dry_run) {
-                Ok(result) => {
-                    if dry_run {
-                        println!("\nDry run: would archive {} job(s)", result.archived_count);
-                    } else if result.archived_count > 0 {
-                        println!("\nArchived {} job(s) to jobs/archive/", result.archived_count);
-                    } else {
-                        println!("No jobs to archive");
-                    }
-                    Ok(())
-                }
-                Err(e) => Err(e),
-            }
-        }
-
-        Commands::Cleanup { days, dry_run } => {
-            let project_root = std::env::current_dir().unwrap();
-            match cleanup_archived_jobs(&project_root, days, dry_run) {
-                Ok(result) => {
-                    if dry_run {
-                        println!("\nDry run: would delete {} archived job(s)", result.deleted_count);
-                    } else if result.deleted_count > 0 {
-                        println!("\nCleaned up {} archived job(s)", result.deleted_count);
-                    } else {
-                        println!("No archived jobs to clean up");
-                    }
-                    Ok(())
-                }
-                Err(e) => Err(e),
-            }
         }
     };
 
