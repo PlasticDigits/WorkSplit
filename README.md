@@ -99,6 +99,50 @@ The local LLM handles all the verbose code generation and verification internall
 └─────────────────────────────────────────────────────────────────┘
 ```
 
+### Context Window Construction
+
+When WorkSplit sends a request to Ollama, it constructs the context in two parts:
+
+**1. System Message** (from `src/core/prompts.rs`):
+Short, action-oriented prompts that set model behavior. Example for create mode:
+```
+You are a fast coding agent. Execute immediately in a single pass.
+RULES:
+1. Read the prompt ONCE, then output code immediately
+2. Do NOT reconsider, re-analyze, or second-guess
+...
+```
+
+**2. User Message** (assembled from multiple sources):
+```
+[SYSTEM]
+<contents of jobs/_systemprompt_create.md>
+Language-specific guidelines, code style, output format
+
+[CONTEXT]
+### File: src/models/user.rs
+<file contents>
+
+### File: src/db/connection.rs
+<file contents>
+
+[INSTRUCTIONS]
+<job markdown content - requirements, specifications>
+
+Output to: src/services/user_service.rs
+```
+
+**Mode-specific additions:**
+- **Edit mode**: `[TARGET FILES]` with line numbers for surgical edits
+- **Sequential mode**: `[PREVIOUSLY GENERATED IN THIS JOB]` and `[REMAINING FILES]`
+- **Split mode**: `[TARGET FILE TO SPLIT]` and `[ALREADY GENERATED IN THIS SPLIT]`
+- **Verify mode**: `[GENERATED OUTPUT]` with the code to verify
+
+**Key insight**: The file-based system prompts (`_systemprompt_*.md`) should only contain:
+- Language-specific code style guidelines
+- Output format for that specific mode
+- NO information about other modes (edit prompts shouldn't explain create format, etc.)
+
 ## Key Principle: Minimize Manager Overhead
 
 Every feature in WorkSplit is designed to reduce what the manager must read, write, or decide:
