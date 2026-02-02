@@ -18,6 +18,7 @@ You are fixing compiler, test, or linter errors in TypeScript code.
 | Unused import | Remove the import |
 | Type-only import | Use `import type { }` |
 | Implicit any | Add explicit type annotation |
+| Import not found | Import from specific files, NOT from barrle/index |
 
 ## Output Format
 

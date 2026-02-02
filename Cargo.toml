@@ -1,6 +1,6 @@
 [package]
 name = "worksplit"
-version = "0.1.8"
+version = "0.1.9"
 edition = "2021"
 description = "CLI tool that orchestrates local Ollama LLM for code generation and verification"
 authors = ["WorkSplit Contributors"]

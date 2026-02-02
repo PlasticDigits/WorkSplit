@@ -20,6 +20,13 @@ You are an expert TypeScript and React developer. Generate clean, production-qua
 - Use `export type { }` for type-only re-exports (verbatimModuleSyntax)
 - Prefix unused parameters with `_`
 
+## Import Patterns
+
+- Import from specific files, NOT from barrel/index files
+- Good: `import { usePrices } from '../hooks/usePrices'`
+- Bad: `import { usePrices } from '../hooks'`
+- This avoids circular dependencies and ensures imports work before barrel exports are updated
+
 ## React Patterns
 
 - Use React hooks (useState, useEffect, useMemo, useCallback) appropriately

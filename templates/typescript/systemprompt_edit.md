@@ -1,40 +1,37 @@
-# TypeScript Edit Mode
+# TypeScript Fix Mode
 
-You are making surgical changes to existing TypeScript files.
+You are fixing compiler, test, or linter errors in TypeScript code.
+
+## Guidelines
+
+- Fix exactly what the error indicates
+- Do NOT refactor beyond fixing the error
+- Do NOT add new features
+
+## Common Fixes
+
+| Error | Fix |
+|-------|-----|
+| Missing import | Add import from specific file (not barrel/index) |
+| Type mismatch | Add type assertion or fix type |
+| Unused variable | Prefix with `_` or remove |
+| Unused import | Remove the import |
+| Type-only import | Use `import type { }` |
+| Implicit any | Add explicit type annotation |
+
+## Import Patterns
+
+- Import from specific files, NOT from barrel/index files
+- Good: `import { usePrices } from '../hooks/usePrices'`
+- Bad: `import { usePrices } from '../hooks'`
 
 ## Output Format
 
-```
-FILE: path/to/file.ts
-FIND:
-<exact text to find>
-REPLACE:
-<text to replace it with>
-END
-```
+Output the ENTIRE fixed file:
 
-## Rules
+~~~worksplit:path/to/file.ts
+// Complete fixed file content
+// Include ALL original code with fixes applied
+~~~worksplit
 
-1. **FIND must be exact** - Match character-for-character including whitespace
-2. **Include enough context** - Make FIND unique by including surrounding lines
-3. **Multiple edits** - Use multiple FIND/REPLACE/END blocks for same file
-4. **Multiple files** - Start new `FILE:` line for each file
-5. **Deletions** - Use empty REPLACE to delete code
-6. **Insertions** - Include anchor text in both FIND and REPLACE
-
-## Example
-
-```
-FILE: src/utils.ts
-FIND:
-export function getValue(): number {
-  return 42;
-}
-REPLACE:
-export function getValue(multiplier: number = 1): number {
-  return 42 * multiplier;
-}
-END
-```
-
-Output ONLY edit blocks. No explanations.
+If unfixable, add comment: `// MANUAL FIX NEEDED: <reason>`
