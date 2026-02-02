@@ -167,6 +167,12 @@ pub struct BuildConfig {
     /// Whether to run tests after generation
     #[serde(default = "default_verify_tests")]
     pub verify_tests: bool,
+    /// Whether to auto-fix build/test/lint failures (default: true)
+    #[serde(default = "default_auto_fix")]
+    pub auto_fix: bool,
+    /// Maximum auto-fix attempts (default: 2)
+    #[serde(default = "default_auto_fix_attempts")]
+    pub auto_fix_attempts: u8,
 }
 
 impl Default for BuildConfig {
@@ -177,6 +183,8 @@ impl Default for BuildConfig {
             lint_command: None,
             verify_build: default_verify_build(),
             verify_tests: default_verify_tests(),
+            auto_fix: default_auto_fix(),
+            auto_fix_attempts: default_auto_fix_attempts(),
         }
     }
 }
@@ -187,6 +195,14 @@ fn default_verify_build() -> bool {
 
 fn default_verify_tests() -> bool {
     false
+}
+
+fn default_auto_fix() -> bool {
+    true
+}
+
+fn default_auto_fix_attempts() -> u8 {
+    2
 }
 
 /// Archive configuration
@@ -402,5 +418,24 @@ days = 60
         assert_eq!(config.archive.days, 7);
         assert!(!config.cleanup.enabled);
         assert_eq!(config.cleanup.days, 60);
+    }
+
+    #[test]
+    fn test_default_auto_fix_config() {
+        let config = Config::default();
+        assert!(config.build.auto_fix);
+        assert_eq!(config.build.auto_fix_attempts, 2);
+    }
+
+    #[test]
+    fn test_parse_toml_with_auto_fix() {
+        let toml_str = r#"
+[build]
+auto_fix = false
+auto_fix_attempts = 3
+"#;
+        let config: Config = toml::from_str(toml_str).unwrap();
+        assert!(!config.build.auto_fix);
+        assert_eq!(config.build.auto_fix_attempts, 3);
     }
 }

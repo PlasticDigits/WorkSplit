@@ -6,7 +6,8 @@ use tracing::{debug, info, warn};
 
 use crate::core::file_cache::{CacheStats, FileCache};
 use crate::error::{JobParseError, WorkSplitError};
-use crate::models::{Job, JobMetadata, LimitsConfig};
+use crate::models::{Config, Job, JobMetadata, LimitsConfig};
+use crate::templates::get_templates;
 
 /// Jobs folder manager
 pub struct JobsManager {
@@ -123,12 +124,47 @@ impl JobsManager {
         ))
     }
 
-    /// Load a system prompt file
+    /// Get template content for a system prompt file
+    fn get_template_for_prompt(&self, filename: &str) -> Option<&'static str> {
+        // Load config to get language
+        let config = Config::load_from_dir(&self.project_root).unwrap_or_default();
+        let templates = get_templates(config.project.language);
+
+        match filename {
+            "_systemprompt_create.md" => Some(templates.create_prompt),
+            "_systemprompt_verify.md" => Some(templates.verify_prompt),
+            "_systemprompt_edit.md" => Some(templates.edit_prompt),
+            "_systemprompt_verify_edit.md" => Some(templates.verify_edit_prompt),
+            "_systemprompt_split.md" => Some(templates.split_prompt),
+            "_systemprompt_test.md" => Some(templates.test_prompt),
+            "_systemprompt_fix.md" => Some(templates.fix_prompt),
+            "_managerinstruction.md" => Some(templates.manager_instruction),
+            _ => None,
+        }
+    }
+
+    /// Load a system prompt file, auto-recreating from template if missing
     pub fn load_system_prompt(&self, filename: &str) -> Result<String, WorkSplitError> {
         let path = self.jobs_dir.join(filename);
+        
         if !path.exists() {
+            // Try to recreate from template
+            if let Some(template_content) = self.get_template_for_prompt(filename) {
+                info!("Recreating missing system prompt: {}", filename);
+                
+                // Ensure jobs directory exists
+                if !self.jobs_dir.exists() {
+                    fs::create_dir_all(&self.jobs_dir)?;
+                }
+                
+                fs::write(&path, template_content)?;
+                info!("Created {} from template", path.display());
+                return Ok(template_content.to_string());
+            }
+            
             return Err(WorkSplitError::SystemPromptNotFound(path));
         }
+        
         Ok(fs::read_to_string(&path)?)
     }
 

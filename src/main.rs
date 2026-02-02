@@ -11,9 +11,9 @@ mod models;
 mod templates;
 
 use commands::{
-    archive_jobs, cancel_jobs, cleanup_archived_jobs, create_new_job, fix_job, init_project,
-    lint_jobs, preview_job, print_validation_result, retry_job, run_jobs, show_status,
-    validate_jobs, RunOptions,
+    archive_jobs, cancel_jobs, cleanup_archived_jobs, create_new_job, fix_all_jobs, fix_job,
+    init_project, lint_jobs, preview_job, print_validation_result, retry_job, run_jobs,
+    show_status, validate_jobs, RunOptions,
 };
 use models::{JobTemplate, Language};
 
@@ -151,6 +151,9 @@ enum Commands {
         /// Job ID whose output to fix
         job: String,
     },
+
+    /// Auto-fix all failed jobs
+    FixAll,
 
     /// Create a new job from a template
     NewJob {
@@ -305,6 +308,11 @@ async fn main() {
         Commands::Fix { job } => {
             let project_root = std::env::current_dir().unwrap();
             fix_job(&project_root, &job).await
+        }
+
+        Commands::FixAll => {
+            let project_root = std::env::current_dir().unwrap();
+            fix_all_jobs(&project_root).await.map(|_| ())
         }
 
         Commands::NewJob {

@@ -12,7 +12,7 @@ use crate::core::{
     SYSTEM_PROMPT_CREATE, SYSTEM_PROMPT_TEST,
 };
 use crate::error::WorkSplitError;
-use crate::models::{Config, JobStatus, Job};
+use crate::models::{Config, ErrorType, JobStatus, Job};
 
 mod edit;
 mod sequential;
@@ -337,6 +337,100 @@ impl Runner {
                     &edit_prompt, &verify_edit_prompt, split_prompt.as_deref()).await
     }
 
+    /// Run build command and return (success, output)
+    fn run_build_command(&self, cmd: &str) -> Result<(bool, String), WorkSplitError> {
+        let output = Command::new("sh")
+            .arg("-c")
+            .arg(cmd)
+            .current_dir(&self.project_root)
+            .output()?;
+
+        let combined = format!(
+            "{}{}",
+            String::from_utf8_lossy(&output.stdout),
+            String::from_utf8_lossy(&output.stderr)
+        );
+
+        Ok((output.status.success(), combined))
+    }
+
+    /// Attempt to auto-fix build errors using LLM
+    async fn attempt_auto_fix(
+        &self,
+        files: &[(PathBuf, String)],
+        error_output: &str,
+        error_type: ErrorType,
+    ) -> Result<bool, WorkSplitError> {
+        // Load fix system prompt (auto-recreates from template if missing)
+        let system_prompt = match self.jobs_manager.load_system_prompt("_systemprompt_fix.md") {
+            Ok(content) => content,
+            Err(e) => {
+                warn!("Could not load fix prompt: {}. Skipping auto-fix.", e);
+                return Ok(false);
+            }
+        };
+
+        // Build user prompt with all affected files
+        let mut user_prompt = format!(
+            "{}\n\n```\n{}\n```\n\n{}\n\n",
+            error_type.prompt_header(),
+            error_output.trim(),
+            error_type.fix_instructions()
+        );
+
+        // Add each file's content
+        for (path, content) in files {
+            user_prompt.push_str(&format!(
+                "## Source File: {}\n\n```\n{}\n```\n\n",
+                path.display(),
+                content
+            ));
+        }
+
+        // Request output for each file
+        user_prompt.push_str("Output the complete fixed file(s) using ~~~worksplit:path/to/file delimiters.\n");
+
+        info!("Calling LLM to fix {} errors...", error_type.lowercase_name());
+        let response = match self.ollama.generate(Some(&system_prompt), &user_prompt, self.config.behavior.stream_output).await {
+            Ok(r) => r,
+            Err(e) => {
+                warn!("LLM call failed: {}. Skipping auto-fix.", e);
+                return Ok(false);
+            }
+        };
+
+        // Parse output
+        let extracted_files = extract_code_files(&response);
+        if extracted_files.is_empty() {
+            warn!("No code extracted from LLM response");
+            return Ok(false);
+        }
+
+        // Write fixed files
+        let mut files_written = 0;
+        for file in &extracted_files {
+            let target_path = if let Some(ref path) = file.path {
+                self.project_root.join(path)
+            } else if files.len() == 1 {
+                files[0].0.clone()
+            } else {
+                continue;
+            };
+
+            if let Some(parent) = target_path.parent() {
+                if !parent.exists() {
+                    fs::create_dir_all(parent)?;
+                }
+            }
+
+            fs::write(&target_path, &file.content)?;
+            info!("Wrote fixed file: {}", target_path.display());
+            files_written += 1;
+        }
+
+        Ok(files_written > 0)
+    }
+
     async fn verify_with_build(&self, _job: &Job, files: &[(PathBuf, String)]) -> Result<(), WorkSplitError> {
         if !self.config.build.verify_build {
             return Ok(());
@@ -348,30 +442,69 @@ impl Runner {
 
         info!("Running build verification command: {}", cmd);
 
-        let output = Command::new("sh")
-            .arg("-c")
-            .arg(cmd)
-            .current_dir(&self.project_root)
-            .output()?;
+        let (success, build_output) = self.run_build_command(cmd)?;
 
-        if !output.status.success() {
-            let stderr = String::from_utf8_lossy(&output.stderr);
-            let stdout = String::from_utf8_lossy(&output.stdout);
+        if success {
+            return Ok(());
+        }
 
-            let error_context = format!(
-                "Build failed after generating files:\n\nFiles generated:\n{}\n\nBuild output:\n{}\n{}",
-                files.iter().map(|(p, _)| p.display().to_string()).collect::<Vec<_>>().join("\n"),
-                stdout,
-                stderr
-            );
+        // Build failed - try auto-fix if enabled
+        let error_context = format!(
+            "Build failed after generating files:\n\nFiles generated:\n{}\n\nBuild output:\n{}",
+            files.iter().map(|(p, _)| p.display().to_string()).collect::<Vec<_>>().join("\n"),
+            build_output
+        );
 
+        if !self.config.build.auto_fix {
             return Err(WorkSplitError::BuildFailed {
                 command: cmd.clone(),
                 output: error_context,
             });
         }
 
-        Ok(())
+        // Auto-fix loop
+        let max_attempts = self.config.build.auto_fix_attempts;
+        let mut current_error = build_output;
+
+        for attempt in 1..=max_attempts {
+            info!("Auto-fix attempt {}/{}", attempt, max_attempts);
+
+            // Read current file contents (may have been modified)
+            let current_files: Vec<(PathBuf, String)> = files.iter()
+                .filter_map(|(path, _)| {
+                    fs::read_to_string(path).ok().map(|content| (path.clone(), content))
+                })
+                .collect();
+
+            let fixed = self.attempt_auto_fix(&current_files, &current_error, ErrorType::Build).await?;
+
+            if !fixed {
+                warn!("Auto-fix attempt {} produced no changes", attempt);
+                continue;
+            }
+
+            // Re-run build
+            let (success, new_output) = self.run_build_command(cmd)?;
+
+            if success {
+                info!("Build succeeded after auto-fix attempt {}", attempt);
+                return Ok(());
+            }
+
+            current_error = new_output;
+            warn!("Build still failing after auto-fix attempt {}", attempt);
+        }
+
+        // All attempts exhausted
+        Err(WorkSplitError::BuildFailed {
+            command: cmd.clone(),
+            output: format!(
+                "Build failed after {} auto-fix attempts:\n\nFiles:\n{}\n\nFinal error:\n{}",
+                max_attempts,
+                files.iter().map(|(p, _)| p.display().to_string()).collect::<Vec<_>>().join("\n"),
+                current_error
+            ),
+        })
     }
 
     async fn run_job(&mut self, job_id: &str, create_prompt: &str, verify_prompt: &str,
