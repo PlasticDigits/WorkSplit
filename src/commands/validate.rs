@@ -2,7 +2,7 @@ use std::path::PathBuf;
 
 use crate::core::JobsManager;
 use crate::error::WorkSplitError;
-use crate::models::LimitsConfig;
+use crate::models::Config;
 
 /// Validation result
 pub struct ValidationResult {
@@ -53,8 +53,11 @@ pub fn validate_jobs(project_root: &PathBuf) -> Result<ValidationResult, WorkSpl
         result.warnings.push("Missing _jobstatus.json (will be created on first run)".to_string());
     }
 
+    // Load config from worksplit.toml (or use defaults)
+    let config = Config::load_from_dir(project_root).unwrap_or_default();
+
     // Validate individual job files
-    let jobs_manager = JobsManager::new(project_root.clone(), LimitsConfig::default());
+    let jobs_manager = JobsManager::new(project_root.clone(), config.limits);
     match jobs_manager.discover_jobs() {
         Ok(jobs) => {
             if jobs.is_empty() {
