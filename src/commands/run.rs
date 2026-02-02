@@ -32,6 +32,8 @@ pub struct RunOptions {
     pub batch: bool,
     /// Maximum concurrent jobs (0 = unlimited)
     pub max_concurrent: usize,
+    /// Include jobs that have already been run (ran=true)
+    pub rerun: bool,
 }
 
 impl Default for RunOptions {
@@ -49,6 +51,7 @@ impl Default for RunOptions {
             stop_on_fail: false,
             batch: false,
             max_concurrent: 0,
+            rerun: false,
         }
     }
 }
@@ -113,7 +116,7 @@ pub async fn run_jobs(project_root: &PathBuf, options: RunOptions) -> Result<(),
             return Ok(());
         }
 
-        let summary = runner.run_batch(options.resume, options.stop_on_fail, options.max_concurrent).await?;
+        let summary = runner.run_batch(options.resume, options.stop_on_fail, options.max_concurrent, options.rerun).await?;
         
         println!("\n=== Batch Run Summary ===");
         println!("Processed: {}", summary.processed);
@@ -144,7 +147,7 @@ pub async fn run_jobs(project_root: &PathBuf, options: RunOptions) -> Result<(),
             return Ok(());
         }
 
-        let summary = runner.run_all(options.resume, options.stop_on_fail).await?;
+        let summary = runner.run_all(options.resume, options.stop_on_fail, options.rerun).await?;
         
         println!("\n=== Run Summary ===");
         println!("Processed: {}", summary.processed);

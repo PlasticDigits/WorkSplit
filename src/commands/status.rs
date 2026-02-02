@@ -46,7 +46,10 @@ pub fn show_status(project_root: &PathBuf, verbose: bool) -> Result<(), WorkSpli
                     JobStatus::Partial => "PARTIAL",
                 };
 
-                print!("  {} [{}]", entry.id, status_str);
+                // Show ran indicator for jobs that have been executed
+                let ran_str = if entry.ran { " (ran)" } else { "" };
+
+                print!("  {} [{}]{}", entry.id, status_str, ran_str);
                 
                 if let Some(ref error) = entry.error {
                     print!(" - {}", error);
@@ -55,6 +58,21 @@ pub fn show_status(project_root: &PathBuf, verbose: bool) -> Result<(), WorkSpli
                 println!();
             }
         }
+    }
+
+    // Show ran but non-pass jobs (likely manually fixed)
+    let ran_non_pass = status_manager.get_ran_non_pass_jobs();
+    if !ran_non_pass.is_empty() {
+        println!("\nNote: {} job(s) ran but did not pass (skipped on rerun):", ran_non_pass.len());
+        for entry in &ran_non_pass {
+            println!("  {} [{}]", entry.id, match entry.status {
+                JobStatus::Fail => "FAIL",
+                JobStatus::Partial => "PARTIAL",
+                _ => "OTHER",
+            });
+        }
+        println!("\nUse 'worksplit reset <job_id>' to reset a job for re-running");
+        println!("Or 'worksplit run --rerun' to include all previously-run jobs");
     }
 
     // Warn about stuck jobs

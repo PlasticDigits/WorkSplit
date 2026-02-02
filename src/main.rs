@@ -121,6 +121,11 @@ enum Commands {
         /// Maximum concurrent jobs in batch mode (0 = unlimited)
         #[arg(long, default_value = "0")]
         max_concurrent: usize,
+
+        /// Include jobs that have already been run (ran=true)
+        /// By default, jobs are only run once; use this to force re-execution
+        #[arg(long)]
+        rerun: bool,
     },
 
     /// Show job status
@@ -256,6 +261,7 @@ async fn main() {
             stop_on_fail,
             batch,
             max_concurrent,
+            rerun,
         } => {
             let project_root = std::env::current_dir().unwrap();
             let options = RunOptions {
@@ -271,6 +277,7 @@ async fn main() {
                 stop_on_fail,
                 batch,
                 max_concurrent,
+                rerun,
             };
             run_jobs(&project_root, options).await
         }

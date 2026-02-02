@@ -163,11 +163,29 @@ impl StatusManager {
             .collect()
     }
 
-    /// Get all jobs that are ready to be processed (created status)
+    /// Get all jobs that are ready to be processed (created status and not yet run)
     pub fn get_ready_jobs(&self) -> Vec<&JobStatusEntry> {
         self.entries
             .values()
+            .filter(|e| e.status.is_ready() && !e.ran)
+            .collect()
+    }
+
+    /// Get all jobs that are ready, including ones that have already run
+    /// Used when --rerun flag is specified
+    pub fn get_ready_jobs_include_ran(&self) -> Vec<&JobStatusEntry> {
+        self.entries
+            .values()
             .filter(|e| e.status.is_ready())
+            .collect()
+    }
+
+    /// Get all jobs that have been run but are not in Pass status
+    /// These are candidates for manual review
+    pub fn get_ran_non_pass_jobs(&self) -> Vec<&JobStatusEntry> {
+        self.entries
+            .values()
+            .filter(|e| e.ran && e.status != JobStatus::Pass)
             .collect()
     }
 
@@ -190,13 +208,22 @@ impl StatusManager {
         summary
     }
 
-    /// Reset a job to created status
+    /// Reset a job to created status and clear the ran flag
     pub fn reset_job(&mut self, job_id: &str) -> Result<(), StatusError> {
         let entry = self.entries.get_mut(job_id)
             .ok_or_else(|| StatusError::JobNotFound(job_id.to_string()))?;
         entry.update_status(JobStatus::Created);
         entry.error = None;
         entry.partial_state = None;
+        entry.ran = false;
+        self.save()
+    }
+
+    /// Mark a job as having been run (regardless of outcome)
+    pub fn mark_ran(&mut self, job_id: &str) -> Result<(), StatusError> {
+        let entry = self.entries.get_mut(job_id)
+            .ok_or_else(|| StatusError::JobNotFound(job_id.to_string()))?;
+        entry.mark_ran();
         self.save()
     }
 

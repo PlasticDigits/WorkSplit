@@ -75,7 +75,7 @@ impl Runner {
         })
     }
 
-    pub async fn run_all(&mut self, resume_stuck: bool, stop_on_fail: bool) -> Result<RunSummary, WorkSplitError> {
+    pub async fn run_all(&mut self, resume_stuck: bool, stop_on_fail: bool, include_ran: bool) -> Result<RunSummary, WorkSplitError> {
         self.modified_files.clear();
         let discovered = self.jobs_manager.discover_jobs()?;
         self.status_manager.sync_with_jobs(&discovered)?;
@@ -86,8 +86,21 @@ impl Runner {
                 stuck.len(), stuck.iter().map(|e| &e.id).collect::<Vec<_>>());
         }
 
-        let mut jobs_to_run: Vec<String> = self.status_manager.get_ready_jobs()
-            .iter().map(|e| e.id.clone()).collect();
+        // Get ready jobs, optionally including those that have already run
+        let ready_jobs = if include_ran {
+            self.status_manager.get_ready_jobs_include_ran()
+        } else {
+            self.status_manager.get_ready_jobs()
+        };
+        let mut jobs_to_run: Vec<String> = ready_jobs.iter().map(|e| e.id.clone()).collect();
+        
+        // Show info about skipped ran jobs if not including them
+        if !include_ran {
+            let ran_jobs = self.status_manager.get_ran_non_pass_jobs();
+            if !ran_jobs.is_empty() {
+                info!("Skipping {} job(s) that already ran. Use --rerun to include them.", ran_jobs.len());
+            }
+        }
 
         if resume_stuck {
             jobs_to_run.extend(stuck.iter().map(|e| e.id.clone()));
@@ -174,6 +187,7 @@ impl Runner {
         resume_stuck: bool,
         stop_on_fail: bool,
         max_concurrent: usize,
+        include_ran: bool,
     ) -> Result<RunSummary, WorkSplitError> {
         self.modified_files.clear();
         let discovered = self.jobs_manager.discover_jobs()?;
@@ -185,8 +199,21 @@ impl Runner {
             warn!("Found {} stuck jobs. Use --resume to retry them", stuck.len());
         }
 
-        let mut jobs_to_run: Vec<String> = self.status_manager.get_ready_jobs()
-            .iter().map(|e| e.id.clone()).collect();
+        // Get ready jobs, optionally including those that have already run
+        let ready_jobs = if include_ran {
+            self.status_manager.get_ready_jobs_include_ran()
+        } else {
+            self.status_manager.get_ready_jobs()
+        };
+        let mut jobs_to_run: Vec<String> = ready_jobs.iter().map(|e| e.id.clone()).collect();
+        
+        // Show info about skipped ran jobs if not including them
+        if !include_ran {
+            let ran_jobs = self.status_manager.get_ran_non_pass_jobs();
+            if !ran_jobs.is_empty() {
+                info!("Skipping {} job(s) that already ran. Use --rerun to include them.", ran_jobs.len());
+            }
+        }
 
         if resume_stuck {
             jobs_to_run.extend(stuck.iter().map(|e| e.id.clone()));
@@ -715,6 +742,12 @@ impl Runner {
             } else {
                 self.status_manager.update_status(job_id, final_status)?;
             }
+        }
+
+        // Mark the job as having been run (regardless of outcome)
+        // This prevents unnecessary reruns when the output was manually fixed
+        if let Err(e) = self.status_manager.mark_ran(job_id) {
+            warn!("Failed to mark job as ran: {}", e);
         }
 
         if final_status == JobStatus::Pass {

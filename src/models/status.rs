@@ -154,6 +154,10 @@ pub struct JobStatusEntry {
     /// State for partially completed edit jobs
     #[serde(skip_serializing_if = "Option::is_none")]
     pub partial_state: Option<PartialEditState>,
+    /// Whether this job has been run (regardless of pass/fail outcome)
+    /// Jobs with ran=true are skipped by default on subsequent runs
+    #[serde(default)]
+    pub ran: bool,
 }
 
 impl JobStatusEntry {
@@ -167,7 +171,20 @@ impl JobStatusEntry {
             updated_at: now,
             error: None,
             partial_state: None,
+            ran: false,
         }
+    }
+
+    /// Mark this job as having been run
+    pub fn mark_ran(&mut self) {
+        self.ran = true;
+        self.updated_at = Utc::now();
+    }
+
+    /// Reset the ran flag (for re-running jobs)
+    pub fn clear_ran(&mut self) {
+        self.ran = false;
+        self.updated_at = Utc::now();
     }
 
     /// Update the status and timestamp

@@ -22,6 +22,7 @@ pub async fn retry_job(project_root: &PathBuf, job_id: &str) -> Result<(), WorkS
         stop_on_fail: false,
         batch: false,
         max_concurrent: 0,
+        rerun: false, // Not needed since reset clears the ran flag
     };
     
     run_jobs(project_root, options).await?;
